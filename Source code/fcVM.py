@@ -1030,6 +1030,7 @@ def calcDisp(elNodes, nocoord, fix, fixdof, movdof, modf, materialbyElement, int
         qelnorm = np.linalg.norm(qelastic)
         qnorm = qelnorm
         print("qnorm", qnorm)
+        sig_new = np.zeros(24 * nelem, dtype=np.float64)  # reset sig_new to zero
 
     step = -1
     cnt = True
