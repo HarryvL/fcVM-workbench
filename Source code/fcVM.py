@@ -21,9 +21,6 @@
 # ***************************************************************************
 
 
-import Fem
-import sys
-import math
 import time
 import ObjectsFem
 import numpy as np
@@ -32,15 +29,14 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from FreeCAD import Units
 import scipy.sparse as scsp
+from numba import jit, types
 from numba.typed import Dict
 import matplotlib.pyplot as plt
 from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
-from numba import types, __version__
 from sksparse.cholmod import cholesky
 from matplotlib.widgets import Button
-from numba import jit, prange, objmode
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 
@@ -186,7 +182,8 @@ def setUpInput(doc, mesh, analysis):
             movdof[dof] = 1
 
     lf = [[0, 0, 0, 0, 0, 0]]  # load face nodes - signature for numba
-    pr = [0]  # load face pressure - signature for numba
+    pr = [0.0]  # load face pressure - signature for numba
+
     for obj in App.ActiveDocument.Objects:
         if obj.isDerivedFrom('Fem::ConstraintPressure'):
             if obj.Reversed:
@@ -203,7 +200,8 @@ def setUpInput(doc, mesh, analysis):
                             pr.append(sign * obj.Pressure)
                     else:
                         prn_upd("No Faces with Pressure Loads")
-    loadfaces = np.asarray(lf)
+
+    loadfaces = np.array(lf)
     pressure = np.array(pr)
 
     # re-order element nodes
@@ -452,7 +450,9 @@ def gaussPoints():
 
 
 # calculate the global stiffness matrix and load vector
-@jit(nopython=True, cache=True)
+@jit(
+    "types.Tuple((float64[:],int64[:], int64[:], float64[:], float64[:]))(int64[:,:], float64[:,:], float64[:,:], DictType(int64,float64), int64[:,:], float64, float64[:])",
+    nopython=True, cache=True)
 def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav, pressure):
     gp10, gp6 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
@@ -470,7 +470,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav, pressure)
     row = np.zeros(ns, dtype=types.int64)  # row indices of COO matrix
     col = np.zeros(ns, dtype=types.int64)  # column indices of COO matrix
     stm = np.zeros(ns, dtype=types.float64)  # stiffness values of COO matrix
-    modf = np.zeros((3 * nn), dtype=types.float64)  # stiffness values of COO matrix
+    modf = np.zeros((3 * nn), dtype=types.float64)  # modification to the stiffness matrix for displacement BCs
     dof = np.zeros(30, dtype=types.int64)
     dmat = np.zeros((6, 6), dtype=np.float64)
     bmatV = np.zeros((6, 30), dtype=np.float64)
@@ -569,9 +569,6 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav, pressure)
     col = col[:pos]
     stm = stm[:pos]
 
-    # interface stiffness value
-    kmax = 0.01 * np.amax(stm)
-
     loadsumx = 0.0
     loadsumy = 0.0
     loadsumz = 0.0
@@ -586,7 +583,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav, pressure)
     print("loadsumy", loadsumy)
     print("loadsumz", loadsumz, "\n")
 
-    return stm, row, col, glv, modf, kmax
+    return stm, row, col, glv, modf
 
 
 # calculate load-deflection curve

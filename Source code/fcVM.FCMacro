@@ -106,7 +106,7 @@ prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n"
 # calculate the global stiffness matrix and global load vector
 prn_upd("calculate the GSM and GLV\n")
 t0 = time.time()
-stm, row, col, globalLoadVector, modf, kmax = ft.calcGSM(elNodes, noCoord, elMat, fix, loadFaces, gravity, pressure)
+stm, row, col, globalLoadVector, modf = ft.calcGSM(elNodes, noCoord, elMat, fix, loadFaces, gravity, pressure)
 
 t1 = time.time()
 t[2] = t1 - t0
