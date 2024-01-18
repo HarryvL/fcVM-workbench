@@ -51,11 +51,10 @@ import fcVM as ft
 
 t = 6 * [0.0]
 
-
 mdir = App.getUserMacroDir(True)
 name = App.ActiveDocument.Name
 with open(mdir + '/../Control files/' + name + '.inp', encoding='utf8') as f:
-        file_raw = f.readlines()
+    file_raw = f.readlines()
 
 fc = []
 for line in file_raw:
@@ -98,8 +97,7 @@ prn_upd(f"extract information from FreeCAD objects - time taken:  {t1 - t0:7.3f}
 # prepare finite element input
 prn_upd("prepare finite element input\n")
 t0 = time.time()
-elNodes, noCoord, fix, fixdof, movdof, loadFaces, elMat, interface_elements, noce, pressure, link0, link1, ks_red = (
-    ft.setUpInput(doc, mesh, analysis))
+elNodes, noCoord, fix, fixdof, movdof, loadFaces, elMat, noce, pressure = ft.setUpInput(doc, mesh, analysis)
 
 t1 = time.time()
 t[1] = t1 - t0
@@ -108,10 +106,7 @@ prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n"
 # calculate the global stiffness matrix and global load vector
 prn_upd("calculate the GSM and GLV\n")
 t0 = time.time()
-stm, row, col, globalLoadVector, modf, kmax = ft.calcGSM(elNodes, noCoord, elMat, fix,
-                                                         loadFaces, interface_elements,
-                                                         gravity, kn, ks, pressure, link0,
-                                                         link1, ks_red)
+stm, row, col, globalLoadVector, modf, kmax = ft.calcGSM(elNodes, noCoord, elMat, fix, loadFaces, gravity, pressure)
 
 t1 = time.time()
 t[2] = t1 - t0
@@ -123,13 +118,9 @@ Gui.updateGui()
 t0 = time.time()
 
 profiler.enable()
-displacements, stresses, peeq, tractions = ft.calcDisp(elNodes, noCoord, fix, fixdof, movdof, modf, elMat,
-                                                       interface_elements, kmax,
-                                                       stm, row, col, globalLoadVector,
-                                                       nstep, iterat_max,
-                                                       error_max, relax, scale_re, scale_up, scale_dn, sig_yield, phi,
-                                                       psi, ts, shr_yield, kn, ks, out_disp, link0, link1,
-                                                       elMat, loadFaces, gravity, pressure, ks_red, mmod)
+displacements, stresses, peeq = ft.calcDisp(elNodes, noCoord, fixdof, movdof, modf, elMat,
+                                            stm, row, col, globalLoadVector, nstep, iterat_max,
+                                            error_max, relax, scale_re, scale_up, scale_dn, sig_yield, out_disp)
 profiler.disable()
 stats = pstats.Stats(profiler).sort_stats('cumtime')
 stats.dump_stats('/home/harryvl/calcDISP_stats.dat')
@@ -141,23 +132,16 @@ prn_upd(f"solve the global stiffness matrix equation - time taken:  {t1 - t0:7.3
 # map stresses to nodal points
 prn_upd("map stresses and strains to nodal points\n")
 t0 = time.time()
-tet10stress, tet10peeq, contactpressurevector, contactpressurevalue, contactshearvector = ft.mapStresses(elNodes,
-                                                                                                         noCoord,
-                                                                                                         interface_elements,
-                                                                                                         displacements,
-                                                                                                         stresses,
-                                                                                                         peeq,
-                                                                                                         tractions,
-                                                                                                         noce)
+tet10stress, tet10peeq = ft.mapStresses(elNodes, noCoord, stresses, peeq, noce)
 t1 = time.time()
 t[4] = t1 - t0
+
 prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
 
 # paste results in the FEM result object
 prn_upd("paste results in the FEM result object\n")
 t0 = time.time()
-resInt, resVol = ft.pasteResults(doc, elNodes, noCoord, interface_elements, displacements, tet10stress, tet10peeq,
-                                 contactpressurevector, contactpressurevalue, contactshearvector)
+resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq)
 t1 = time.time()
 t[5] = t1 - t0
 prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
