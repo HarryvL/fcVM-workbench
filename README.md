@@ -1,12 +1,12 @@
 # fcVM-workbench
 Finite element collapse analysis based on the von Mises plasticity model for use with FreeCAD [FreeCAD](https://freecad.org)
 
-<img src="https://github.com/HarryvL/fcVM-workbench/tree/main/pictures/Embankment_with_Ditch_Example_Load_Displacement.png" height="200"/> <img src="https://github.com/HarryvL/fcFEM-basic/blob/main/Pictures/pictures/Embankment_with_Ditch_Example_Failure_Mechanism.png" height="220" raw=true/> 
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Embankment_with_Ditch_Example_Load_Displacement.png" height="250"/> <img src="https://github.com/HarryvL/fcVM/blob/main/pictures/Embankment_with_Ditch_Example_Failure_Mechanism.png" height="220" raw=true/> 
 
 ### Background
 fcVM is a finite element workbench and solver for performing collapse analysis of structures and soil bodies. It is based on the theory of elastoplasticity and gives insight in ductility and reserve strength beyond first yield. The theory underpinning fcVM can be found in the document included in this repository.
 
-<img src="https://github.com/HarryvL/fcFEM-basic/blob/main/Pictures/punch_indentation_VTK.png" height="200"/>
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Plate_with_hole_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Plate_with_hole_Example_Failure_Mechanism.png" height="200"/>
 
 ### Prerequisites
 * FreeCAD >= v0.19
@@ -17,7 +17,7 @@ fcVM is a finite element workbench and solver for performing collapse analysis o
 1. Restart FreeCAD
 1. If all went well, the fcVM workbench should now be an option in the FreeCAD workbench dropdown menu.
 
-<img src="https://github.com/HarryvL/fcFEM-basic/blob/main/Pictures/Plate_with_Hole_3.png" height="200"/>
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/>
 
 ### Dependencies
 fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib and scikit-sparse. On Linux and Mac-OS systems these can be installed with the usual package managers. On Windows this requires more effort:
