@@ -17,7 +17,7 @@ fcVM is a finite element workbench and solver for performing collapse analysis o
 1. Restart FreeCAD
 1. If all went well, the fcVM workbench should now be an option in the FreeCAD workbench dropdown menu.
 
-<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/>
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
 
 ### Dependencies
 fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib and scikit-sparse. On Linux and Mac-OS systems these can be installed with the usual package managers. On Windows this requires more effort:
@@ -35,7 +35,7 @@ fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib and 
 ### Documentation
 Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
 
-<img src="https://github.com/HarryvL/fcFEM-basic/blob/main/Pictures/Beam_Collapse%20(2).jpg" width="450"/>
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Failure_Mechanism.png" height="200"/>
 
 ### Licence information
 
