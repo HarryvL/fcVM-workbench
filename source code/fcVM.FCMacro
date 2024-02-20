@@ -1,0 +1,155 @@
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2019 - Harry van Langen <hvlanalysis@icloud.com>        *
+# *                                                                         *
+# *   This program is free software; you can redistribute it and/or modify  *
+# *   it under the terms of the GNU Lesser General Public License (LGPL)    *
+# *   as published by the Free Software Foundation; either version 2 of     *
+# *   the License, or (at your option) any later version.                   *
+# *   for detail see the LICENCE text file.                                 *
+# *                                                                         *
+# *   This program is distributed in the hope that it will be useful,       *
+# *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+# *   GNU Library General Public License for more details.                  *
+# *                                                                         *
+# *   You should have received a copy of the GNU Library General Public     *
+# *   License along with this program; if not, write to the Free Software   *
+# *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
+# *   USA                                                                   *
+# *                                                                         *
+# ***************************************************************************
+
+import os
+import sys
+import time
+import math
+import dummy
+import FreeCAD as App
+import FreeCADGui as Gui
+import cProfile, pstats
+
+profiler = cProfile.Profile()
+
+mdir = os.path.dirname(dummy.file_path())
+name = App.ActiveDocument.Name
+file_path = mdir + '/control files/' + name + '.inp'
+macro_path = mdir + '/source code'
+
+def prn_upd(*args):
+    for obj in args:
+        print(str(obj), end='')
+    print('\n')
+    Gui.updateGui()
+
+
+prn_upd("fcVM.FCMacro started")
+
+if 'fcVM' in sys.modules.keys():
+    del (sys.modules['fcVM'])
+    prn_upd("fcVM in sys.modules.keys")
+else:
+    sys.path.append(macro_path)
+    prn_upd("fcVM path added")
+
+print(App.getUserMacroDir(True))
+
+import fcVM as ft
+
+t = 6 * [0.0]
+
+mdir = os.path.dirname(dummy.file_path())
+name = App.ActiveDocument.Name
+file_path = mdir + '/control files/' + name + '.inp'
+print("file_path: ", file_path)
+
+try:
+    with open(file_path, encoding='utf8') as f:
+        sig_yield = float(f.readline().strip())
+        grav_x = float(f.readline().strip())
+        grav_y = float(f.readline().strip())
+        grav_z = float(f.readline().strip())
+        nstep = int(f.readline().strip())
+        iterat_max = int(f.readline().strip())
+        error_max = float(f.readline().strip())
+        relax = float(f.readline().strip())
+        scale_re = float(f.readline().strip())
+        scale_up = float(f.readline().strip())
+        scale_dn = float(f.readline().strip())
+        disp_output = f.readline().strip()
+
+
+except:
+    print("file not found")
+
+# extract information from FreeCAD objects
+Gui.updateGui()
+t0 = time.time()
+doc, mesh, analysis = ft.setUpAnalysis()
+t1 = time.time()
+t[0] = t1 - t0
+prn_upd(f"extract information from FreeCAD objects - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+# prepare finite element input
+prn_upd("prepare finite element input\n")
+t0 = time.time()
+elNodes, noCoord, fix, fixdof, movdof, loadFaces, elMat, noce, pressure = ft.setUpInput(doc, mesh, analysis)
+
+t1 = time.time()
+t[1] = t1 - t0
+prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+# calculate the global stiffness matrix and global load vector
+prn_upd("calculate the GSM and GLV\n")
+t0 = time.time()
+stm, row, col, globalLoadVector, modf = ft.calcGSM(elNodes, noCoord, elMat, fix, loadFaces, grav_x, grav_y, grav_z,
+                                                   pressure)
+
+t1 = time.time()
+t[2] = t1 - t0
+prn_upd(f"calculate the GSM and GLV - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+# solve the global stiffness matrix equation
+prn_upd("solve the global stiffness matrix equation\n")
+Gui.updateGui()
+t0 = time.time()
+
+profiler.enable()
+displacements, stresses, peeq = ft.calcDisp(elNodes, noCoord, fixdof, movdof, modf, elMat,
+                                            stm, row, col, globalLoadVector, nstep, iterat_max,
+                                            error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output)
+profiler.disable()
+stats = pstats.Stats(profiler).sort_stats('cumtime')
+stats.dump_stats('/home/harryvl/calcDISP_stats.dat')
+
+t1 = time.time()
+t[3] = t1 - t0
+prn_upd(f"solve the global stiffness matrix equation - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+# map stresses to nodal points
+prn_upd("map stresses and strains to nodal points\n")
+t0 = time.time()
+tet10stress, tet10peeq = ft.mapStresses(elNodes, noCoord, stresses, peeq, noce)
+t1 = time.time()
+t[4] = t1 - t0
+
+prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+# paste results in the FEM result object
+prn_upd("paste results in the FEM result object\n")
+t0 = time.time()
+resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq)
+t1 = time.time()
+t[5] = t1 - t0
+prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
+         f"prepare finite element input................................... {t[1]:7.3f} seconds",
+         f"calculate the global stiffness matrix and global load vector... {t[2]:7.3f} seconds",
+         f"solve the global siffness matrix equation...................... {t[3]:7.3f} seconds",
+         f"map stresses to nodal points................................... {t[4]:7.3f} seconds",
+         f"paste results in the FEM result object......................... {t[5]:7.3f} seconds"]
+
+prn_upd("------------------------------ SUMMARY ------------------------------")
+for entry in timer:
+    prn_upd(entry)
