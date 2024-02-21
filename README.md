@@ -37,6 +37,10 @@ Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
 
 <img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Failure_Mechanism.png" height="200"/>
 
+### Current Limitations
+1. fcVM only works with 2nd order volumetric meshes generated with GMSH (10-noded tetrahedrals).
+1. Loading conditions are limited to self-weight, pressure and prescribed displacements.
+
 ### Licence information
 
 Copyright (c) 2024 - Harry van Langen <hvlanalysis@gmail.com>  
