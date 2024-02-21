@@ -17,6 +17,41 @@ fcVM is a finite element workbench and solver for performing collapse analysis o
 1. Restart FreeCAD
 1. If all went well, the fcVM workbench should now be an option in the FreeCAD workbench dropdown menu
 
+```bash
+App.getUserAppDataDir()
+├── Mod
+│   ├── fcVM-workbench
+│   │   ├── control files
+│   │   │   ├── Block_Disp_Control_Example.inp
+│   │   │   └── etc.
+│   │   ├── documentation
+│   │   │   └── Numerical Analysis of Soil Structure Interaction HvL.PDF
+│   │   ├── freeCAD files
+│   │   │   ├── Block_Disp_Control_Example.FCStd
+│   │   │   └── etc.
+│   │   ├── icons
+│   │   │   └── fcFEM.svg
+│   │   ├── pictures
+│   │   │   ├── Embankment_with_Ditch_Example_Failure_Mechanism.png
+│   │   │   └── etc.
+│   │   ├── source code
+│   │   │   ├── .gitignore
+│   │   │   ├── fcVM.FCMacro
+│   │   │   └── fcVM.py
+│   │   ├── user_interface
+│   │   │   └── fcVM.ui
+│   │   ├── .gitignore
+│   │   │
+│   │   ├── Init.py
+│   │   │
+│   │   ├── InitGui.py
+│   │   │
+│   │   ├── README.md
+│   │   │
+│   │   └── dummy.py
+│   │
+```
+
 <img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
 
 ### Dependencies
