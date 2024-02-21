@@ -1,6 +1,6 @@
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2024 - Harry van Langen <hvlanalysis@icloud.com>        *
+# *   Copyright (c) 2024 - Harry van Langen <hvlanalysis@gmail.com>        *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -63,10 +63,10 @@ class fcVMWorkbench(Workbench):
             self.doc = FreeCAD.newDocument("fcVM")
 
         self.file_name = self.doc.Label
-        print("self.file_name: ", self.file_name)
-        self.macro_file_path = dir_name + '/source code/' + 'fcVM.FCMacro'
+        # print("self.file_name: ", self.file_name)
+        self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
 
-        print(self.macro_file_path)
+        # print(self.macro_file_path)
 
         self.disp_option = "incremental"
 
@@ -75,26 +75,27 @@ class fcVMWorkbench(Workbench):
                 self.workbench_instance = workbench_instance
 
             def slotActivateDocument(self, doc):
-                print("----- slotActivateDocument -----")
+                # print("----- slotActivateDocument -----")
                 if FreeCAD.activeDocument().Label[0:7] != "Unnamed":
                     self.workbench_instance.save_clicked()
                     self.workbench_instance.file_name = FreeCAD.activeDocument().Label
                     self.workbench_instance.open_file()
-                print("--------------------------------")
-                print()
+                # print("--------------------------------")
+                # print()
 
             def slotFinishSaveDocument(self, doc, prop):
-                print("----- slotfinishSaveDocument -----")
+                # print("----- slotfinishSaveDocument -----")
                 self.workbench_instance.save_clicked()  # save under old file name
                 self.workbench_instance.file_name = doc.Label
                 self.workbench_instance.save_clicked()  # save under new file name
-                print("----------------------------------")
-                print()
+                # print("----------------------------------")
+                # print()
 
         self.obs = DocObserver(self)
         FreeCAD.addDocumentObserver(self.obs)
 
         ui_Path = os.path.join(dir_name, "user_interface", "fcVM.ui")
+
         w = FreeCADGui.PySideUic.loadUi(ui_Path)
 
         w.startBtn.clicked.connect(self.start_clicked)
@@ -180,8 +181,9 @@ class fcVMWorkbench(Workbench):
         w.incrRbtn.setChecked(True)
 
     def save_clicked(self):
-        inp_file_path = dir_name + '/control files/' + self.file_name + '.inp'
-        print("save file: ", inp_file_path)
+        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+
+        # print("save file: ", inp_file_path)
         with open(inp_file_path, "w") as f:
             f.write(w.YSinput.text() + "\n")
             f.write(w.GXinput.text() + "\n")
@@ -200,8 +202,8 @@ class fcVMWorkbench(Workbench):
         # self.file_name = self.doc.Label
 
     def open_file(self):
-        inp_file_path = dir_name + '/control files/' + self.file_name + '.inp'
-        print("open file: ", inp_file_path)
+        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+        # print("open file: ", inp_file_path)
         try:
             with open(inp_file_path, "r") as f:
                 w.YSinput.setText(str(f.readline().strip()))
@@ -221,7 +223,7 @@ class fcVMWorkbench(Workbench):
                     w.incrRbtn.setChecked(True)
 
         except FileNotFoundError:
-            print("File does not exist")
+            # print("File does not exist")
             w.YSinput.setText(self.YSinput_default)
             w.GXinput.setText(self.GXinput_default)
             w.GYinput.setText(self.GYinput_default)

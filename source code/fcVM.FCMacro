@@ -1,6 +1,6 @@
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2019 - Harry van Langen <hvlanalysis@icloud.com>        *
+# *   Copyright (c) 2024 - Harry van Langen <hvlanalysis@gmail.com>        *
 # *                                                                         *
 # *   This program is free software; you can redistribute it and/or modify  *
 # *   it under the terms of the GNU Lesser General Public License (LGPL)    *
@@ -23,18 +23,15 @@
 import os
 import sys
 import time
-import math
 import dummy
 import FreeCAD as App
 import FreeCADGui as Gui
-import cProfile, pstats
-
-profiler = cProfile.Profile()
 
 mdir = os.path.dirname(dummy.file_path())
 name = App.ActiveDocument.Name
-file_path = mdir + '/control files/' + name + '.inp'
-macro_path = mdir + '/source code'
+file_path = os.path.join(mdir, "control files", name + '.inp')
+macro_path = os.path.join(mdir, 'source code')
+
 
 def prn_upd(*args):
     for obj in args:
@@ -52,16 +49,9 @@ else:
     sys.path.append(macro_path)
     prn_upd("fcVM path added")
 
-print(App.getUserMacroDir(True))
-
 import fcVM as ft
 
 t = 6 * [0.0]
-
-mdir = os.path.dirname(dummy.file_path())
-name = App.ActiveDocument.Name
-file_path = mdir + '/control files/' + name + '.inp'
-print("file_path: ", file_path)
 
 try:
     with open(file_path, encoding='utf8') as f:
@@ -114,13 +104,9 @@ prn_upd("solve the global stiffness matrix equation\n")
 Gui.updateGui()
 t0 = time.time()
 
-profiler.enable()
 displacements, stresses, peeq = ft.calcDisp(elNodes, noCoord, fixdof, movdof, modf, elMat,
                                             stm, row, col, globalLoadVector, nstep, iterat_max,
                                             error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output)
-profiler.disable()
-stats = pstats.Stats(profiler).sort_stats('cumtime')
-stats.dump_stats('/home/harryvl/calcDISP_stats.dat')
 
 t1 = time.time()
 t[3] = t1 - t0
