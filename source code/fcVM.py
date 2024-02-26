@@ -799,6 +799,11 @@ def plot(un, lbd):
             plt.close()
             self.clicked = True
 
+        def close_window(self, event):
+            if self.cnt == False:
+                self.stop('stop_event')
+
+
     callback = Index()
     callback.cnt = False
     callback.clicked = False
@@ -815,6 +820,7 @@ def plot(un, lbd):
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
     badd.on_clicked(callback.add)
+    fig.canvas.mpl_connect('close_event', callback.close_window)
     plt.show()
 
     while True:
