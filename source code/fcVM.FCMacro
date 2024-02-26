@@ -32,6 +32,11 @@ name = App.ActiveDocument.Name
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
 
+global progress_update
+
+progress_update = fcVM_window.progressBar.setValue
+progress_update(0)
+
 
 def prn_upd(*args):
     for obj in args:
@@ -67,6 +72,7 @@ try:
         scale_up = float(f.readline().strip())
         scale_dn = float(f.readline().strip())
         disp_output = f.readline().strip()
+        ultimate_strain = float(f.readline().strip())
 
 
 except:
@@ -106,7 +112,8 @@ t0 = time.time()
 
 displacements, stresses, peeq = ft.calcDisp(elNodes, noCoord, fixdof, movdof, modf, elMat,
                                             stm, row, col, globalLoadVector, nstep, iterat_max,
-                                            error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output)
+                                            error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
+                                            ultimate_strain, progress_update)
 
 t1 = time.time()
 t[3] = t1 - t0
@@ -139,3 +146,6 @@ timer = [f"extract information from FreeCAD objects....................... {t[0]
 prn_upd("------------------------------ SUMMARY ------------------------------")
 for entry in timer:
     prn_upd(entry)
+
+progress_update(0)
+

@@ -20,6 +20,17 @@
 # *                                                                         *
 # ***************************************************************************
 
+__Title__ = "fcVM"
+__Author__ = "HarryvL"
+__Url__ = "https://github.com/HarryvL/fcVM-workbench"
+__Version__ = "1.1.0"
+__Date__ = "2024/02/25"
+__Comment__ = "first release"
+__Forum__ = "https://forum.freecad.org/viewtopic.php?t=85474"
+__Status__ = "initial development"
+__Requires__ = "freecad version 0.19 or higher"
+__Communication__ = "https://forum.freecad.org/viewtopic.php?t=85474"
+
 import os
 import dummy
 import FreeCAD
@@ -56,7 +67,7 @@ class fcVMWorkbench(Workbench):
 
     def Activated(self):
         from PySide2 import QtCore
-        global w
+        global fcVM_window
 
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
@@ -66,8 +77,6 @@ class fcVMWorkbench(Workbench):
         # print("self.file_name: ", self.file_name)
         self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
 
-        # print(self.macro_file_path)
-
         self.disp_option = "incremental"
 
         class DocObserver(object):  # document Observer
@@ -75,55 +84,51 @@ class fcVMWorkbench(Workbench):
                 self.workbench_instance = workbench_instance
 
             def slotActivateDocument(self, doc):
-                # print("----- slotActivateDocument -----")
                 if FreeCAD.activeDocument().Label[0:7] != "Unnamed":
                     self.workbench_instance.save_clicked()
                     self.workbench_instance.file_name = FreeCAD.activeDocument().Label
                     self.workbench_instance.open_file()
-                # print("--------------------------------")
-                # print()
 
             def slotFinishSaveDocument(self, doc, prop):
-                # print("----- slotfinishSaveDocument -----")
                 self.workbench_instance.save_clicked()  # save under old file name
                 self.workbench_instance.file_name = doc.Label
                 self.workbench_instance.save_clicked()  # save under new file name
-                # print("----------------------------------")
-                # print()
 
         self.obs = DocObserver(self)
         FreeCAD.addDocumentObserver(self.obs)
 
         ui_Path = os.path.join(dir_name, "user_interface", "fcVM.ui")
 
-        w = FreeCADGui.PySideUic.loadUi(ui_Path)
+        fcVM_window = FreeCADGui.PySideUic.loadUi(ui_Path)
 
-        w.startBtn.clicked.connect(self.start_clicked)
-        w.quitBtn.clicked.connect(self.Deactivated)
-        w.resetBtn.clicked.connect(self.reset_clicked)
-        w.saveBtn.clicked.connect(self.save_clicked)
-        w.totalRbtn.toggled.connect(self.btn_state)
-        w.incrRbtn.toggled.connect(self.btn_state)
+        fcVM_window.startBtn.clicked.connect(self.start_clicked)
+        fcVM_window.quitBtn.clicked.connect(self.Deactivated)
+        fcVM_window.resetBtn.clicked.connect(self.reset_clicked)
+        fcVM_window.saveBtn.clicked.connect(self.save_clicked)
+        fcVM_window.totalRbtn.toggled.connect(self.btn_state)
+        fcVM_window.incrRbtn.toggled.connect(self.btn_state)
 
-        w.max_iter.textChanged.connect(self.max_iter_changed)
-        w.relax.textChanged.connect(self.relax_changed)
-        w.scale_1.textChanged.connect(self.scale_1_changed)
-        w.scale_2.textChanged.connect(self.scale_2_changed)
-        w.scale_3.textChanged.connect(self.scale_3_changed)
+        fcVM_window.max_iter.textChanged.connect(self.max_iter_changed)
+        fcVM_window.relax.textChanged.connect(self.relax_changed)
+        fcVM_window.scale_1.textChanged.connect(self.scale_1_changed)
+        fcVM_window.scale_2.textChanged.connect(self.scale_2_changed)
+        fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
 
-        w.YSinput.setValidator(double_validator)
-        w.GXinput.setValidator(double_validator)
-        w.GYinput.setValidator(double_validator)
-        w.GZinput.setValidator(double_validator)
-        w.steps.setValidator(int_validator)
-        w.max_iter.setValidator(int_validator)
-        w.error.setValidator(double_validator)
-        w.relax.setValidator(double_validator)
-        w.scale_1.setValidator(double_validator)
-        w.scale_2.setValidator(double_validator)
-        w.scale_3.setValidator(double_validator)
+        fcVM_window.YSinput.setValidator(double_validator)
+        fcVM_window.USinput.setValidator(double_validator)
+        fcVM_window.GXinput.setValidator(double_validator)
+        fcVM_window.GYinput.setValidator(double_validator)
+        fcVM_window.GZinput.setValidator(double_validator)
+        fcVM_window.steps.setValidator(int_validator)
+        fcVM_window.max_iter.setValidator(int_validator)
+        fcVM_window.error.setValidator(double_validator)
+        fcVM_window.relax.setValidator(double_validator)
+        fcVM_window.scale_1.setValidator(double_validator)
+        fcVM_window.scale_2.setValidator(double_validator)
+        fcVM_window.scale_3.setValidator(double_validator)
 
         self.YSinput_default = "240.0"
+        self.USinput_default = "0.25"
         self.GXinput_default = "0.0"
         self.GYinput_default = "0.0"
         self.GZinput_default = "-10.0"
@@ -138,15 +143,15 @@ class fcVMWorkbench(Workbench):
 
         self.open_file()
 
-        FCmw.addDockWidget(QtCore.Qt.RightDockWidgetArea, w.dw)
+        FCmw.addDockWidget(QtCore.Qt.RightDockWidgetArea, fcVM_window.dw)
 
     def Deactivated(self):
 
         FreeCAD.removeDocumentObserver(self.obs)
 
         try:
-            if w.dw.isVisible():
-                w.dw.setVisible(False)
+            if fcVM_window.dw.isVisible():
+                fcVM_window.dw.setVisible(False)
         except Exception:
             None
 
@@ -168,133 +173,136 @@ class fcVMWorkbench(Workbench):
         self.Deactivated()
 
     def reset_clicked(self):
-        w.max_iter.setText(self.max_iter_default)
-        w.error.setText(self.error_default)
-        w.relax.setText(self.relax_default)
-        w.scale_1.setText(self.scale_1_default)
-        w.scale_2.setText(self.scale_2_default)
-        w.scale_3.setText(self.scale_3_default)
-        w.relax.setPalette(self.palette_standard)
-        w.scale_1.setPalette(self.palette_standard)
-        w.scale_2.setPalette(self.palette_standard)
-        w.scale_3.setPalette(self.palette_standard)
-        w.incrRbtn.setChecked(True)
+        fcVM_window.max_iter.setText(self.max_iter_default)
+        fcVM_window.error.setText(self.error_default)
+        fcVM_window.relax.setText(self.relax_default)
+        fcVM_window.scale_1.setText(self.scale_1_default)
+        fcVM_window.scale_2.setText(self.scale_2_default)
+        fcVM_window.scale_3.setText(self.scale_3_default)
+        fcVM_window.relax.setPalette(self.palette_standard)
+        fcVM_window.scale_1.setPalette(self.palette_standard)
+        fcVM_window.scale_2.setPalette(self.palette_standard)
+        fcVM_window.scale_3.setPalette(self.palette_standard)
+        fcVM_window.incrRbtn.setChecked(True)
 
     def save_clicked(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
 
         # print("save file: ", inp_file_path)
         with open(inp_file_path, "w") as f:
-            f.write(w.YSinput.text() + "\n")
-            f.write(w.GXinput.text() + "\n")
-            f.write(w.GYinput.text() + "\n")
-            f.write(w.GZinput.text() + "\n")
-            f.write(w.steps.text() + "\n")
-            f.write(w.max_iter.text() + "\n")
-            f.write(w.error.text() + "\n")
-            f.write(w.relax.text() + "\n")
-            f.write(w.scale_1.text() + "\n")
-            f.write(w.scale_2.text() + "\n")
-            f.write(w.scale_3.text() + "\n")
+            f.write(fcVM_window.YSinput.text() + "\n")
+            f.write(fcVM_window.GXinput.text() + "\n")
+            f.write(fcVM_window.GYinput.text() + "\n")
+            f.write(fcVM_window.GZinput.text() + "\n")
+            f.write(fcVM_window.steps.text() + "\n")
+            f.write(fcVM_window.max_iter.text() + "\n")
+            f.write(fcVM_window.error.text() + "\n")
+            f.write(fcVM_window.relax.text() + "\n")
+            f.write(fcVM_window.scale_1.text() + "\n")
+            f.write(fcVM_window.scale_2.text() + "\n")
+            f.write(fcVM_window.scale_3.text() + "\n")
             f.write(self.disp_option + "\n")
-
-        # self.doc = FreeCAD.activeDocument()
-        # self.file_name = self.doc.Label
+            f.write(fcVM_window.USinput.text() + "\n")
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
-        # print("open file: ", inp_file_path)
         try:
             with open(inp_file_path, "r") as f:
-                w.YSinput.setText(str(f.readline().strip()))
-                w.GXinput.setText(str(f.readline().strip()))
-                w.GYinput.setText(str(f.readline().strip()))
-                w.GZinput.setText(str(f.readline().strip()))
-                w.steps.setText(str(f.readline().strip()))
-                w.max_iter.setText(str(f.readline().strip()))
-                w.error.setText(str(f.readline().strip()))
-                w.relax.setText(str(f.readline().strip()))
-                w.scale_1.setText(str(f.readline().strip()))
-                w.scale_2.setText(str(f.readline().strip()))
-                w.scale_3.setText(str(f.readline().strip()))
+                fcVM_window.YSinput.setText(str(f.readline().strip()))
+                fcVM_window.GXinput.setText(str(f.readline().strip()))
+                fcVM_window.GYinput.setText(str(f.readline().strip()))
+                fcVM_window.GZinput.setText(str(f.readline().strip()))
+                fcVM_window.steps.setText(str(f.readline().strip()))
+                fcVM_window.max_iter.setText(str(f.readline().strip()))
+                fcVM_window.error.setText(str(f.readline().strip()))
+                fcVM_window.relax.setText(str(f.readline().strip()))
+                fcVM_window.scale_1.setText(str(f.readline().strip()))
+                fcVM_window.scale_2.setText(str(f.readline().strip()))
+                fcVM_window.scale_3.setText(str(f.readline().strip()))
                 if str(f.readline().strip()) == "total":
-                    w.totalRbtn.setChecked(True)
+                    fcVM_window.totalRbtn.setChecked(True)
                 else:
-                    w.incrRbtn.setChecked(True)
+                    fcVM_window.incrRbtn.setChecked(True)
+                USinp = str(f.readline().strip())
+                if USinp == "":
+                    fcVM_window.USinput.setText(self.USinput_default)
+                else:
+                    fcVM_window.USinput.setText(USinp)
 
         except FileNotFoundError:
-            # print("File does not exist")
-            w.YSinput.setText(self.YSinput_default)
-            w.GXinput.setText(self.GXinput_default)
-            w.GYinput.setText(self.GYinput_default)
-            w.GZinput.setText(self.GZinput_default)
-            w.steps.setText(self.steps_default)
-            w.max_iter.setText(self.max_iter_default)
-            w.error.setText(self.error_default)
-            w.relax.setText(self.relax_default)
-            w.scale_1.setText(self.scale_1_default)
-            w.scale_2.setText(self.scale_2_default)
-            w.scale_3.setText(self.scale_3_default)
-            w.incrRbtn.setChecked(True)
+            fcVM_window.YSinput.setText(self.YSinput_default)
+            fcVM_window.USinput.setText(self.USinput_default)
+            fcVM_window.GXinput.setText(self.GXinput_default)
+            fcVM_window.GYinput.setText(self.GYinput_default)
+            fcVM_window.GZinput.setText(self.GZinput_default)
+            fcVM_window.steps.setText(self.steps_default)
+            fcVM_window.max_iter.setText(self.max_iter_default)
+            fcVM_window.error.setText(self.error_default)
+            fcVM_window.relax.setText(self.relax_default)
+            fcVM_window.scale_1.setText(self.scale_1_default)
+            fcVM_window.scale_2.setText(self.scale_2_default)
+            fcVM_window.scale_3.setText(self.scale_3_default)
+            fcVM_window.incrRbtn.setChecked(True)
+            fcVM_window.USinput.setText(self.USinput_default)
 
     def max_iter_changed(self):
-        if (w.max_iter.text() != self.max_iter_default):
-            w.max_iter.setPalette(self.palette_warning)
+        if (fcVM_window.max_iter.text() != self.max_iter_default):
+            fcVM_window.max_iter.setPalette(self.palette_warning)
         else:
-            w.max_iter.setPalette(self.palette_standard)
+            fcVM_window.max_iter.setPalette(self.palette_standard)
 
     def relax_changed(self):
-        if (w.relax.text() != self.relax_default):
-            if w.relax.text() == "":
-                w.relax.setText("0.0")
-            if float(w.relax.text()) > 1.5:
-                w.relax.setText("1.5")
-            elif float(w.relax.text()) < 1.0:
-                w.relax.setText("1.0")
-            w.relax.setPalette(self.palette_warning)
+        if (fcVM_window.relax.text() != self.relax_default):
+            if fcVM_window.relax.text() == "":
+                fcVM_window.relax.setText("0.0")
+            if float(fcVM_window.relax.text()) > 1.5:
+                fcVM_window.relax.setText("1.5")
+            elif float(fcVM_window.relax.text()) < 1.0:
+                fcVM_window.relax.setText("1.0")
+            fcVM_window.relax.setPalette(self.palette_warning)
         else:
-            w.relax.setPalette(self.palette_standard)
+            fcVM_window.relax.setPalette(self.palette_standard)
 
     def scale_1_changed(self):
-        if (w.scale_1.text() != self.scale_1_default):
-            if w.scale_1.text() == "":
-                w.scale_1.setText("0.0")
-            if float(w.scale_1.text()) > 3.0:
-                w.scale_1.setText("3.0")
-            elif float(w.scale_1.text()) < 1.0:
-                w.scale_1.setText("1.0")
-            w.scale_1.setPalette(self.palette_warning)
+        if (fcVM_window.scale_1.text() != self.scale_1_default):
+            if fcVM_window.scale_1.text() == "":
+                fcVM_window.scale_1.setText("0.0")
+            if float(fcVM_window.scale_1.text()) > 3.0:
+                fcVM_window.scale_1.setText("3.0")
+            elif float(fcVM_window.scale_1.text()) < 1.0:
+                fcVM_window.scale_1.setText("1.0")
+            fcVM_window.scale_1.setPalette(self.palette_warning)
         else:
-            w.scale_1.setPalette(self.palette_standard)
+            fcVM_window.scale_1.setPalette(self.palette_standard)
 
     def scale_2_changed(self):
-        if (w.scale_2.text() != self.scale_2_default):
-            if w.scale_2.text() == "":
-                w.scale_2.setText("0.0")
-            if float(w.scale_2.text()) > 2.0:
-                w.scale_2.setText("2.0")
-            elif float(w.scale_2.text()) < 1.0:
-                w.scale_2.setText("1.0")
-            w.scale_2.setPalette(self.palette_warning)
+        if (fcVM_window.scale_2.text() != self.scale_2_default):
+            if fcVM_window.scale_2.text() == "":
+                fcVM_window.scale_2.setText("0.0")
+            if float(fcVM_window.scale_2.text()) > 2.0:
+                fcVM_window.scale_2.setText("2.0")
+            elif float(fcVM_window.scale_2.text()) < 1.0:
+                fcVM_window.scale_2.setText("1.0")
+            fcVM_window.scale_2.setPalette(self.palette_warning)
         else:
-            w.scale_2.setPalette(self.palette_standard)
+            fcVM_window.scale_2.setPalette(self.palette_standard)
 
     def scale_3_changed(self):
-        if w.scale_3.text() == "":
-            w.scale_3.setText("0.0")
-        if (w.scale_3.text() != self.scale_3_default):
-            if float(w.scale_3.text()) > 2.0:
-                w.scale_3.setText("2.0")
-            elif float(w.scale_3.text()) < 1.0:
-                w.scale_3.setText("1.0")
-            w.scale_3.setPalette(self.palette_warning)
+        if fcVM_window.scale_3.text() == "":
+            fcVM_window.scale_3.setText("0.0")
+        if (fcVM_window.scale_3.text() != self.scale_3_default):
+            if float(fcVM_window.scale_3.text()) > 2.0:
+                fcVM_window.scale_3.setText("2.0")
+            elif float(fcVM_window.scale_3.text()) < 1.0:
+                fcVM_window.scale_3.setText("1.0")
+            fcVM_window.scale_3.setPalette(self.palette_warning)
         else:
-            w.scale_3.setPalette(self.palette_standard)
+            fcVM_window.scale_3.setPalette(self.palette_standard)
 
     def btn_state(self):
-        if w.totalRbtn.isChecked():
+        if fcVM_window.totalRbtn.isChecked():
             self.disp_option = "total"
-        if w.incrRbtn.isChecked():
+        if fcVM_window.incrRbtn.isChecked():
             self.disp_option = "incremental"
 
 

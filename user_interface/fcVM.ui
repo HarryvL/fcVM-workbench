@@ -106,14 +106,7 @@
                   <bool>false</bool>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_4">
-                  <item row="0" column="0">
-                   <widget class="QLabel" name="label">
-                    <property name="text">
-                     <string>Yield Stress</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="1">
+                  <item row="2" column="1">
                    <layout class="QVBoxLayout" name="verticalLayout">
                     <item>
                      <widget class="QLineEdit" name="GXinput">
@@ -156,10 +149,26 @@
                     </item>
                    </layout>
                   </item>
-                  <item row="1" column="2">
-                   <widget class="QLabel" name="label_6">
+                  <item row="0" column="0">
+                   <widget class="QLabel" name="label">
                     <property name="text">
-                     <string>(m/s2)</string>
+                     <string>Yield Stress</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QLineEdit" name="YSinput">
+                    <property name="maximumSize">
+                     <size>
+                      <width>150</width>
+                      <height>27</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>240.0</string>
+                    </property>
+                    <property name="frame">
+                     <bool>true</bool>
                     </property>
                    </widget>
                   </item>
@@ -170,7 +179,7 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="0">
+                  <item row="2" column="0">
                    <layout class="QVBoxLayout" name="verticalLayout_4">
                     <item>
                      <widget class="QLabel" name="label_2">
@@ -195,8 +204,22 @@
                     </item>
                    </layout>
                   </item>
-                  <item row="0" column="1">
-                   <widget class="QLineEdit" name="YSinput">
+                  <item row="2" column="2">
+                   <widget class="QLabel" name="label_6">
+                    <property name="text">
+                     <string>(m/s2)</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="label_14">
+                    <property name="text">
+                     <string>Ultimate Strain</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="1">
+                   <widget class="QLineEdit" name="USinput">
                     <property name="maximumSize">
                      <size>
                       <width>150</width>
@@ -204,101 +227,41 @@
                      </size>
                     </property>
                     <property name="text">
-                     <string>240.0</string>
+                     <string>0.25</string>
                     </property>
-                    <property name="frame">
-                     <bool>true</bool>
+                   </widget>
+                  </item>
+                  <item row="1" column="2">
+                   <widget class="QLabel" name="label_15">
+                    <property name="text">
+                     <string>(mm/mm)</string>
                     </property>
                    </widget>
                   </item>
                  </layout>
                 </widget>
                </item>
-               <item row="4" column="0">
-                <widget class="QGroupBox" name="actionBox">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>80</height>
-                  </size>
-                 </property>
+               <item row="5" column="0">
+                <widget class="QGroupBox" name="groupBox_2">
                  <property name="title">
-                  <string>Actions</string>
+                  <string>Progress</string>
                  </property>
-                 <layout class="QGridLayout" name="gridLayout_3">
-                  <item row="0" column="3">
-                   <widget class="QPushButton" name="quitBtn">
-                    <property name="text">
-                     <string>Quit</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="2">
-                   <widget class="QPushButton" name="startBtn">
-                    <property name="text">
-                     <string>Start</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="0">
-                   <widget class="QPushButton" name="resetBtn">
-                    <property name="text">
-                     <string>Reset</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="1">
-                   <widget class="QPushButton" name="saveBtn">
-                    <property name="text">
-                     <string>Save</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item row="2" column="0">
-                <widget class="QGroupBox" name="outputBox">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>16777215</width>
-                   <height>100</height>
-                  </size>
-                 </property>
-                 <property name="title">
-                  <string>Output options </string>
-                 </property>
-                 <layout class="QGridLayout" name="gridLayout_5">
-                  <item row="1" column="0">
-                   <widget class="QRadioButton" name="incrRbtn">
-                    <property name="text">
-                     <string>Incremental displacements (failure mechanism)</string>
-                    </property>
-                    <property name="checked">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="0">
-                   <widget class="QRadioButton" name="totalRbtn">
-                    <property name="text">
-                     <string>Total displacements</string>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
+                 <widget class="QProgressBar" name="progressBar">
+                  <property name="geometry">
+                   <rect>
+                    <x>10</x>
+                    <y>30</y>
+                    <width>331</width>
+                    <height>25</height>
+                   </rect>
+                  </property>
+                  <property name="value">
+                   <number>0</number>
+                  </property>
+                  <property name="format">
+                   <string>%p%</string>
+                  </property>
+                 </widget>
                 </widget>
                </item>
                <item row="3" column="0">
@@ -420,20 +383,91 @@
                  </layout>
                 </widget>
                </item>
-               <item row="5" column="0">
-                <widget class="QFrame" name="filler">
+               <item row="4" column="0">
+                <widget class="QGroupBox" name="actionBox">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
+                   <height>80</height>
+                  </size>
+                 </property>
+                 <property name="title">
+                  <string>Actions</string>
+                 </property>
+                 <layout class="QGridLayout" name="gridLayout_3">
+                  <item row="0" column="3">
+                   <widget class="QPushButton" name="quitBtn">
+                    <property name="text">
+                     <string>Quit</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="2">
+                   <widget class="QPushButton" name="startBtn">
+                    <property name="text">
+                     <string>Start</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="0">
+                   <widget class="QPushButton" name="resetBtn">
+                    <property name="text">
+                     <string>Reset</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QPushButton" name="saveBtn">
+                    <property name="text">
+                     <string>Save</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QGroupBox" name="outputBox">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
                    <height>100</height>
                   </size>
                  </property>
-                 <property name="frameShape">
-                  <enum>QFrame::StyledPanel</enum>
+                 <property name="title">
+                  <string>Output options </string>
                  </property>
-                 <property name="frameShadow">
-                  <enum>QFrame::Raised</enum>
-                 </property>
+                 <layout class="QGridLayout" name="gridLayout_5">
+                  <item row="1" column="0">
+                   <widget class="QRadioButton" name="incrRbtn">
+                    <property name="text">
+                     <string>Incremental displacements (failure mechanism)</string>
+                    </property>
+                    <property name="checked">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="0">
+                   <widget class="QRadioButton" name="totalRbtn">
+                    <property name="text">
+                     <string>Total displacements</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
                 </widget>
                </item>
               </layout>
