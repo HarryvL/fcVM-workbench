@@ -775,7 +775,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             csrplot.append(np.max(csr))
 
         csr_non_zero = np.nonzero(csrplot)
-        if len(csr_non_zero) != 0:
+        if len(csr_non_zero[0]) != 0:
             el_limit = csr_non_zero[0][0] - 1
         else:
             el_limit = 0
