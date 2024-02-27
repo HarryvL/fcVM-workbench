@@ -631,6 +631,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     sig_old = np.zeros(24 * nelem, dtype=np.float64)
     sig_test = np.zeros(24 * nelem, dtype=np.float64)
     peeq = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
+    triax = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
+    pressure = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
+    sigmises = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
+    ecr = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
     csr = np.zeros(4 * nelem, dtype=np.float64)  # critical strain ratio in Tet10
     disp_new = np.zeros(ndof, dtype=np.float64)  # displacement results
     disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
@@ -655,6 +659,12 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
     un = [0.]
     csrplot = [0.]
+    crip = [0]
+    pplot = [0.]
+    svmplot = [0.]
+    triaxplot = [0.]
+    peeqplot = [0.]
+    ecrplot = [0.]
 
     if float(nstep) == 1.0:
         # perform an elastic (one-step) analysis
@@ -771,9 +781,39 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 dl *= scale_up
                 du *= scale_up
             un.append(np.max(np.abs(disp_new)))
-            update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr)
+            update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax,
+                            pressure, sigmises, ecr)
+            maxloc = np.argmax(csr)
             csrplot.append(np.max(csr))
+            crip.append(maxloc)
+            pplot.append(pressure[maxloc])
+            svmplot.append(sigmises[maxloc])
+            triaxplot.append(triax[maxloc])
+            ecrplot.append(ecr[maxloc])
+            peeqplot.append(peeq[maxloc])
 
+        if max(movdof) == 1:
+            lout = rfl
+        else:
+            lout = lbd
+
+        print('{0: >6}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}'.format("ip_max",
+                                                                                       "load",
+                                                                                       "peeq",
+                                                                                       "pressure",
+                                                                                       "svmises",
+                                                                                       "triax",
+                                                                                       "eps_cr",
+                                                                                       "csr_max"))
+        for i in range(len(crip)):
+            print('{0: 6d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}'.format(crip[i],
+                                                                                                     lout[i],
+                                                                                                     peeqplot[i],
+                                                                                                     pplot[i],
+                                                                                                     svmplot[i],
+                                                                                                     triaxplot[i],
+                                                                                                     ecrplot[i],
+                                                                                                     csrplot[i]))
         csr_non_zero = np.nonzero(csrplot)
         if len(csr_non_zero[0]) != 0:
             el_limit = csr_non_zero[0][0] - 1
@@ -785,11 +825,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         else:
             ul_limit = 0
 
-        # plot load-displacement curve - TODO: move to output / post-processing
-        if max(movdof) == 1:
-            cnt = plot(el_limit, ul_limit, un, rfl, csrplot)
-        else:
-            cnt = plot(el_limit, ul_limit, un, lbd, csrplot)
+        cnt = plot(el_limit, ul_limit, un, lout, csrplot)
 
     prn_upd("total time evaluating K_inv * r: {}".format(factor_time_tot))
     prn_upd("total number of iterations: {}".format(iterat_tot))
@@ -801,10 +837,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     l_out = lbd[out] - lbd[out - 1]
     prn_upd("Step: {0:2d} Load level increment: {1:.3f} Displacement increment: {2:.4e}".format(out, l_out,
                                                                                                 u_out))
+
     if disp_output == "total":
-        return disp_new, sig_new, peeq
+        return disp_new, sig_new, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot
     else:
-        return disp_new - disp_old, sig_new, peeq
+        return disp_new - disp_old, sig_new, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot
 
 
 # plot the load-deflection curve
@@ -868,7 +905,8 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
 
 # update PEEQ and CSR
 @jit(nopython=True, cache=True, fastmath=True)
-def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr):
+def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax, pressure,
+                    sigmises, ecr):
     E = materialbyElement[0][0]  # Young's Modulus
     nu = materialbyElement[0][1]  # Poisson's Ratio
     G = E / 2.0 / (1 + nu)  # shear modulus
@@ -900,7 +938,13 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             else:
                 T = 1.0e12
 
+            pressure[ipos1] = p_n
+            sigmises[ipos1] = sig_mises_new
+            triax[ipos1] = T
+
             critical_strain = alpha * np.exp(-beta * T)
+
+            ecr[ipos1] = critical_strain
 
             if (sig_mises_test > sig_yield):
                 peeq[ipos1] += (sig_mises_test - sig_yield) / G / 3.0

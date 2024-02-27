@@ -110,10 +110,11 @@ prn_upd("solve the global stiffness matrix equation\n")
 Gui.updateGui()
 t0 = time.time()
 
-displacements, stresses, peeq = ft.calcDisp(elNodes, noCoord, fixdof, movdof, modf, elMat,
-                                            stm, row, col, globalLoadVector, nstep, iterat_max,
-                                            error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-                                            ultimate_strain, progress_update)
+displacements, stresses, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot = ft.calcDisp(
+    elNodes, noCoord, fixdof, movdof, modf, elMat,
+    stm, row, col, globalLoadVector, nstep, iterat_max,
+    error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
+    ultimate_strain, progress_update)
 
 t1 = time.time()
 t[3] = t1 - t0
@@ -147,5 +148,17 @@ prn_upd("------------------------------ SUMMARY ------------------------------")
 for entry in timer:
     prn_upd(entry)
 
-progress_update(0)
+file_path = os.path.join(mdir, "output files", name + '.out')
 
+with open(file_path, "w") as f:
+    f.write(
+        "{0: >6}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format("ip_max", "load", "peeq",
+                                                                                   "pressure", "svmises", "triax",
+                                                                                   "eps_cr", "csr_max"))
+    for i in range(len(crip)):
+        f.write('{0: 6d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
+            crip[i], lout[i], peeqplot[i], pplot[i], svmplot[i], triaxplot[i], ecrplot[i], csrplot[i]))
+
+f.close()
+
+progress_update(0)
