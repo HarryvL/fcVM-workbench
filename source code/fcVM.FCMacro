@@ -110,7 +110,7 @@ prn_upd("solve the global stiffness matrix equation\n")
 Gui.updateGui()
 t0 = time.time()
 
-displacements, stresses, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot = ft.calcDisp(
+displacements, stresses, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
@@ -120,22 +120,23 @@ t1 = time.time()
 t[3] = t1 - t0
 prn_upd(f"solve the global stiffness matrix equation - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-# map stresses to nodal points
-prn_upd("map stresses and strains to nodal points\n")
-t0 = time.time()
-tet10stress, tet10peeq = ft.mapStresses(elNodes, noCoord, stresses, peeq, noce)
-t1 = time.time()
-t[4] = t1 - t0
+if not fail:
+    # map stresses to nodal points
+    prn_upd("map stresses and strains to nodal points\n")
+    t0 = time.time()
+    tet10stress, tet10peeq, tet10csr = ft.mapStresses(elNodes, noCoord, stresses, peeq, csr, noce)
+    t1 = time.time()
+    t[4] = t1 - t0
 
-prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
+    prn_upd(f"map stresses to nodal points - time taken:  {t1 - t0:7.3f}  seconds\n")
 
-# paste results in the FEM result object
-prn_upd("paste results in the FEM result object\n")
-t0 = time.time()
-resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq)
-t1 = time.time()
-t[5] = t1 - t0
-prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
+    # paste results in the FEM result object
+    prn_upd("paste results in the FEM result object\n")
+    t0 = time.time()
+    resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr)
+    t1 = time.time()
+    t[5] = t1 - t0
+    prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
 
 timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
          f"prepare finite element input................................... {t[1]:7.3f} seconds",

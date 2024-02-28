@@ -40,6 +40,7 @@ from sksparse.cholmod import cholesky
 from matplotlib.widgets import Button
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
+from femtaskpanels import task_result_mechanical as trm
 
 np.set_printoptions(precision=5, linewidth=300)
 
@@ -656,6 +657,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
     step = -1
     cnt = True
+    fail = False
 
     un = [0.]
     csrplot = [0.]
@@ -665,6 +667,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     triaxplot = [0.]
     peeqplot = [0.]
     ecrplot = [0.]
+    lout = [0.]
 
     if float(nstep) == 1.0:
         # perform an elastic (one-step) analysis
@@ -744,7 +747,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     # scale down
                     if restart == 4:
                         print("MAXIMUM RESTARTS REACHED")
-                        raise SystemExit()
+                        fail = True
+                        return disp_new - disp_old, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
                     restart += 1
                     if step > 0:
                         dl = (lbd[step] - lbd[step - 1]) / scale_re / restart
@@ -807,13 +811,19 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                        "csr_max"))
         for i in range(len(crip)):
             print('{0: 6d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}'.format(crip[i],
-                                                                                                     lout[i],
-                                                                                                     peeqplot[i],
-                                                                                                     pplot[i],
-                                                                                                     svmplot[i],
-                                                                                                     triaxplot[i],
-                                                                                                     ecrplot[i],
-                                                                                                     csrplot[i]))
+                                                                                                                lout[i],
+                                                                                                                peeqplot[
+                                                                                                                    i],
+                                                                                                                pplot[
+                                                                                                                    i],
+                                                                                                                svmplot[
+                                                                                                                    i],
+                                                                                                                triaxplot[
+                                                                                                                    i],
+                                                                                                                ecrplot[
+                                                                                                                    i],
+                                                                                                                csrplot[
+                                                                                                                    i]))
         csr_non_zero = np.nonzero(csrplot)
         if len(csr_non_zero[0]) != 0:
             el_limit = csr_non_zero[0][0] - 1
@@ -839,9 +849,9 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot
+        return disp_new, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
     else:
-        return disp_new - disp_old, sig_new, peeq, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot
+        return disp_new - disp_old, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
 
 
 # plot the load-deflection curve
@@ -1172,7 +1182,7 @@ def vmises_original_optimised(sig_test, sig_yield):
 
 
 # map stresses to nodes
-def mapStresses(elNodes, nocoord, sig, peeq, noce):
+def mapStresses(elNodes, nocoord, sig, peeq, csr, noce):
     # map maps corner node stresses to all tet10 nodes
     map = np.array([[1.0, 0.0, 0.0, 0.0],
                     [0.0, 1.0, 0.0, 0.0],
@@ -1188,11 +1198,13 @@ def mapStresses(elNodes, nocoord, sig, peeq, noce):
     expm = np.zeros((4, 4), dtype=np.float64)  # extrapolation matrix from Gauss points to corner nodes
     ipstress = np.zeros((4, 6), dtype=np.float64)  # Tet10 stresses by Gauss point (4 GP and 6 components)
     ippeeq = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
+    ipcsr = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
 
     ip10, ip6 = gaussPoints()
 
     tet10stress = np.zeros((len(nocoord), 6), dtype=np.float64)
     tet10peeq = np.zeros((len(nocoord)), dtype=np.float64)
+    tet10csr = np.zeros((len(nocoord)), dtype=np.float64)
 
     # map stresses in volumes to nodal points
     for el, nodes in enumerate(elNodes):
@@ -1208,27 +1220,31 @@ def mapStresses(elNodes, nocoord, sig, peeq, noce):
             ipposeq = elposeq + index
             ipstress[index] = sig[ippos:ippos + 6]  # ipstress (4x6): 6 stress components for 4 integration points
             ippeeq[index] = peeq[ipposeq]  # ippeeq (4x1): 1 strain component for 4 integration points
+            ipcsr[index] = csr[ipposeq]  # ippeeq (4x1): 1 strain component for 4 integration points
             for i in range(4):
                 expm[index, i] = shp[i]
         expm_inv = np.linalg.inv(expm)
         npstress4 = np.dot(expm_inv, ipstress)  # npstress4 (4x6): for each corner node (4) all stress components (6)
         nppeeq4 = np.dot(expm_inv, ippeeq)  # nppeeq (4x1): for each corner node (4) one strain component (1)
+        npcsr4 = np.dot(expm_inv, ipcsr)  # csr (4x1): for each corner node (4) one csr component (1)
         numnodes = np.array(
             [noce[nodes[n] - 1] for n in range(10)])  # numnodes = number of elements connected to node "nodes[n]-1"
         npstress10 = np.divide(np.dot(map, npstress4).T,
                                numnodes).T  # nodal point stress all nodes divided by number of connecting elements
         nppeeq10 = np.divide(np.dot(map, nppeeq4).T,
                              numnodes).T  # nodal point strain all nodes divided by number of connecting elements
+        npcsr10 = np.divide(np.dot(map, npcsr4).T,
+                            numnodes).T  # nodal point strain all nodes divided by number of connecting elements
         for index, nd in enumerate(nodes):
             tet10stress[nd - 1] += npstress10[index]
-
             tet10peeq[nd - 1] += nppeeq10[index]
+            tet10csr[nd - 1] += npcsr10[index]
 
-    return tet10stress, tet10peeq
+    return tet10stress, tet10peeq, tet10csr
 
 
 # fill resultobject with results
-def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq):
+def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
     analysis = doc.getObject("Analysis")
 
     if analysis is None:
@@ -1287,7 +1303,11 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq):
     resVol.NodeStressXY = tet10stress.T[3].T.tolist()
     resVol.NodeStressXZ = tet10stress.T[4].T.tolist()
     resVol.NodeStressYZ = tet10stress.T[5].T.tolist()
-    resVol.Peeq = tet10peeq.T.tolist()
+    # resVol.Peeq = tet10peeq.T.tolist()
+    resVol.Peeq = tet10csr.T.tolist()  # a hack until I know how to add a result to the results panel
+    resVol.CriticalStrainRatio = tet10csr.T.tolist()  # works for export to VTK
+
+    print("max tet10csr: ", max(tet10csr))
 
     resVol.Mesh = result_mesh_object_1
     resVol.NodeNumbers = [int(key) for key in resVol.Mesh.FemMesh.Nodes.keys()]
@@ -1299,6 +1319,10 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq):
     # Add von Mises Stress and Plastic Strain Ratio to the results
     rt.add_von_mises(resVol)
     rt.add_principal_stress_std(resVol)
+
+    # trm._TaskPanel.result_obj = resVol
+    # trm._TaskPanel.mesh_obj = meshvol
+    # trm._TaskPanel.vm_stress_selected
 
     doc.recompute()
 
