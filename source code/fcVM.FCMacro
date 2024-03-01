@@ -73,6 +73,7 @@ try:
         scale_dn = float(f.readline().strip())
         disp_output = f.readline().strip()
         ultimate_strain = float(f.readline().strip())
+        Et_E = float(f.readline().strip())
 
 
 except:
@@ -110,11 +111,11 @@ prn_upd("solve the global stiffness matrix equation\n")
 Gui.updateGui()
 t0 = time.time()
 
-displacements, stresses, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
+displacements, stresses, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-    ultimate_strain, progress_update)
+    ultimate_strain, progress_update, Et_E)
 
 t1 = time.time()
 t[3] = t1 - t0
@@ -153,12 +154,15 @@ file_path = os.path.join(mdir, "output files", name + '.out')
 
 with open(file_path, "w") as f:
     f.write(
-        "{0: >6}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}\n".format("ip_max", "load", "peeq",
-                                                                                   "pressure", "svmises", "triax",
-                                                                                   "eps_cr", "csr_max"))
+        "{0: >8}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}{8: >10}\n".format("ip_max", "load",
+                                                                                           "disp", "peeq",
+                                                                                           "pressure", "svmises",
+                                                                                           "triax",
+                                                                                           "eps_cr", "csr_max"))
     for i in range(len(crip)):
-        f.write('{0: 6d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}\n'.format(
-            crip[i], lout[i], peeqplot[i], pplot[i], svmplot[i], triaxplot[i], ecrplot[i], csrplot[i]))
+        f.write(
+            '{0: 8d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}\n'.format(
+                crip[i], lout[i], un[i], peeqplot[i], pplot[i], svmplot[i], triaxplot[i], ecrplot[i], csrplot[i]))
 
 f.close()
 

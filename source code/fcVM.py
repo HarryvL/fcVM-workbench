@@ -602,8 +602,8 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav_x, grav_y,
 
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
-             glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-             ultimate_strain, progress_update):
+             glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
+             ultimate_strain, progress_update, Et_E):
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
     t0 = time.perf_counter()
@@ -630,6 +630,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
     sig_new = np.zeros(24 * nelem, dtype=np.float64)  # stress in Tet10
     sig_old = np.zeros(24 * nelem, dtype=np.float64)
+    sig_yield = np.full(4 * nelem, sig_yield_inp, dtype=np.float64)  # yield stress in Tet10
     sig_test = np.zeros(24 * nelem, dtype=np.float64)
     peeq = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
     triax = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
@@ -648,7 +649,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     if max(movdof) == 1:
         qelastic = np.zeros(3 * len(nocoord), dtype=np.float64)
         update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, ue, sig_old, sig_new, sig_test,
-                           qelastic)
+                           qelastic, Et_E)
 
         qelastic *= movdof
         qelnorm = np.linalg.norm(qelastic)
@@ -700,7 +701,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             # update stresses and loads
             qin = np.zeros(3 * len(nocoord), dtype=np.float64)
             update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                               qin)
+                               qin, Et_E)
 
             # calculate residual load vector
             fex = fixdof * lbd[step + 1] * glv
@@ -735,7 +736,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                 qin = np.zeros(3 * len(nocoord), dtype=np.float64)
                 update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                                   qin)
+                                   qin, Et_E)
 
                 # calculate out of balance error
                 r = fixdof * (lbd[step + 1] * glv - qin)
@@ -761,7 +762,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                     qin = np.zeros(3 * len(nocoord), dtype=np.float64)
                     update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new,
-                                       sig_test, qin)
+                                       sig_test, qin, Et_E)
 
                     r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
                     rnorm = np.linalg.norm(r)
@@ -786,7 +787,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 du *= scale_up
             un.append(np.max(np.abs(disp_new)))
             update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax,
-                            pressure, sigmises, ecr)
+                            pressure, sigmises, ecr, Et_E)
             maxloc = np.argmax(csr)
             csrplot.append(np.max(csr))
             crip.append(maxloc)
@@ -801,29 +802,27 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         else:
             lout = lbd
 
-        print('{0: >6}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}'.format("ip_max",
-                                                                                       "load",
-                                                                                       "peeq",
-                                                                                       "pressure",
-                                                                                       "svmises",
-                                                                                       "triax",
-                                                                                       "eps_cr",
-                                                                                       "csr_max"))
+        print('{0: >8}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}{8: >10}'.format("ip_max",
+                                                                                               "load",
+                                                                                               "un",
+                                                                                               "peeq",
+                                                                                               "pressure",
+                                                                                               "svmises",
+                                                                                               "triax",
+                                                                                               "eps_cr",
+                                                                                               "csr_max"))
         for i in range(len(crip)):
-            print('{0: 6d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}'.format(crip[i],
-                                                                                                                lout[i],
-                                                                                                                peeqplot[
-                                                                                                                    i],
-                                                                                                                pplot[
-                                                                                                                    i],
-                                                                                                                svmplot[
-                                                                                                                    i],
-                                                                                                                triaxplot[
-                                                                                                                    i],
-                                                                                                                ecrplot[
-                                                                                                                    i],
-                                                                                                                csrplot[
-                                                                                                                    i]))
+            print(
+                '{0: 8d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}'.format(
+                    crip[i],
+                    lout[i],
+                    un[i],
+                    peeqplot[i],
+                    pplot[i],
+                    svmplot[i],
+                    triaxplot[i],
+                    ecrplot[i],
+                    csrplot[i]))
         csr_non_zero = np.nonzero(csrplot)
         if len(csr_non_zero[0]) != 0:
             el_limit = csr_non_zero[0][0] - 1
@@ -849,9 +848,9 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
     else:
-        return disp_new - disp_old, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new - disp_old, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
 
 
 # plot the load-deflection curve
@@ -916,10 +915,13 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
 # update PEEQ and CSR
 @jit(nopython=True, cache=True, fastmath=True)
 def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax, pressure,
-                    sigmises, ecr):
+                    sigmises, ecr, Et_E):
     E = materialbyElement[0][0]  # Young's Modulus
     nu = materialbyElement[0][1]  # Poisson's Ratio
     G = E / 2.0 / (1 + nu)  # shear modulus
+    if Et_E > 0.95: Et_E = 0.95
+    Et = Et_E * E
+    H = Et / (1.0 - Et_E)
     if ultimate_strain == 0.0:
         ultimate_strain = 1.0e12
     alpha = np.sqrt(np.e) * ultimate_strain  # stress triaxiality T = 1/3 for uniaxial test
@@ -956,8 +958,10 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
 
             ecr[ipos1] = critical_strain
 
-            if (sig_mises_test > sig_yield):
-                peeq[ipos1] += (sig_mises_test - sig_yield) / G / 3.0
+            if (sig_mises_test > sig_yield[ipos1]):
+                DL = (sig_mises_test - sig_yield[ipos1]) / (3.0 * G + H)
+                peeq[ipos1] += DL
+                sig_yield[ipos1] += Et * DL
 
             csr[ipos1] = peeq[ipos1] / critical_strain
 
@@ -965,7 +969,8 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
 # update stresses and loads
 
 @jit(nopython=True, cache=True, fastmath=True)
-def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig, sig_update, sig_test_global, qin):
+def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig, sig_update, sig_test_global, qin,
+                       Et_E):
     u10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes
     sig_test = np.empty(6, dtype=np.float64)
     bm0 = np.empty(10, dtype=np.float64)
@@ -990,6 +995,13 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
 
     hooke(0, materialbyElement, dmat)  # local material stiffness matrix
 
+    E = materialbyElement[0][0]  # Young's Modulus
+    nu = materialbyElement[0][1]  # Poisson's Ratio
+    G = E / 2.0 / (1 + nu)  # shear modulus
+    if Et_E > 0.95: Et_E = 0.95
+    Et = Et_E * E
+    H = Et / (1.0 - Et_E)
+
     for el, nodes in enumerate(elNodes):
         for i, nd in enumerate(nodes):
             co = nocoord[nd - 1]
@@ -1007,6 +1019,8 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
             u10[i3 + 1] = du[n3 + 1]
             u10[i3 + 2] = du[n3 + 2]
         for i in range(4):
+
+            sy = sig_yield[4 * el + i]
             ip = gp10[i]
             ippos = elpos + 6 * i
 
@@ -1132,7 +1146,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
 
             sig_test_global[ippos:ippos + 6] = sig_test
             # return elastic stress to von Mises yield surface
-            sxx, syy, szz, sxy, syz, szx = vmises_original_optimised(sig_test, sig_yield)
+            sxx, syy, szz, sxy, syz, szx = vmises_original_optimised(sig_test, sy, H, G)
             sig_update[ippos:ippos + 6] = sxx, syy, szz, sxy, syz, szx
 
             # calculate element load vectors
@@ -1154,8 +1168,8 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
     return
 
 
-@jit("types.UniTuple(float64, 6)(float64[::1], float64)", nopython=True, cache=True)
-def vmises_original_optimised(sig_test, sig_yield):
+@jit("types.UniTuple(float64, 6)(float64[::1], float64, float64, float64)", nopython=True, cache=True)
+def vmises_original_optimised(sig_test, sig_yield, H, G):
     st0, st1, st2, st3, st4, st5 = sig_test
     p = (st0 + st1 + st2) / 3.0
     st0 -= p
@@ -1167,7 +1181,7 @@ def vmises_original_optimised(sig_test, sig_yield):
     if sig_yield > sig_mises:
         fac = 1.0
     else:
-        fac = sig_yield / sig_mises
+        fac = (1.0 - (1.0 - sig_yield / sig_mises) * 3.0 * G / (H + 3 * G))
 
     st0 = fac * st0 + p
     st1 = fac * st1 + p

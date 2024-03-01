@@ -115,6 +115,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
 
         fcVM_window.YSinput.setValidator(double_validator)
+        fcVM_window.Hinput.setValidator(double_validator)
         fcVM_window.USinput.setValidator(double_validator)
         fcVM_window.GXinput.setValidator(double_validator)
         fcVM_window.GYinput.setValidator(double_validator)
@@ -128,6 +129,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.scale_3.setValidator(double_validator)
 
         self.YSinput_default = "240.0"
+        self.Hinput_default = "0.0"
         self.USinput_default = "0.25"
         self.GXinput_default = "0.0"
         self.GYinput_default = "0.0"
@@ -203,6 +205,7 @@ class fcVMWorkbench(Workbench):
             f.write(fcVM_window.scale_3.text() + "\n")
             f.write(self.disp_option + "\n")
             f.write(fcVM_window.USinput.text() + "\n")
+            f.write(fcVM_window.Hinput.text() + "\n")
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
@@ -228,6 +231,11 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.USinput.setText(self.USinput_default)
                 else:
                     fcVM_window.USinput.setText(USinp)
+                Hinp = str(f.readline().strip())
+                if Hinp == "":
+                    fcVM_window.Hinput.setText(self.Hinput_default)
+                else:
+                    fcVM_window.Hinput.setText(Hinp)
 
         except FileNotFoundError:
             fcVM_window.YSinput.setText(self.YSinput_default)
@@ -244,6 +252,7 @@ class fcVMWorkbench(Workbench):
             fcVM_window.scale_3.setText(self.scale_3_default)
             fcVM_window.incrRbtn.setChecked(True)
             fcVM_window.USinput.setText(self.USinput_default)
+            fcVM_window.Hinput.setText(self.Hinput_default)
 
     def max_iter_changed(self):
         if (fcVM_window.max_iter.text() != self.max_iter_default):
