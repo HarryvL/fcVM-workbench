@@ -113,6 +113,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.scale_1.textChanged.connect(self.scale_1_changed)
         fcVM_window.scale_2.textChanged.connect(self.scale_2_changed)
         fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
+        fcVM_window.Hinput.textChanged.connect(self.Hinput_changed)
 
         fcVM_window.YSinput.setValidator(double_validator)
         fcVM_window.Hinput.setValidator(double_validator)
@@ -307,6 +308,10 @@ class fcVMWorkbench(Workbench):
             fcVM_window.scale_3.setPalette(self.palette_warning)
         else:
             fcVM_window.scale_3.setPalette(self.palette_standard)
+
+    def Hinput_changed(self):
+        if float(fcVM_window.Hinput.text()) < 0.0:
+            fcVM_window.Hinput.setText("0.0")
 
     def btn_state(self):
         if fcVM_window.totalRbtn.isChecked():
