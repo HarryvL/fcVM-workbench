@@ -31,6 +31,9 @@ App.getUserAppDataDir()
 │   │   │   └── etc.
 │   │   ├── icons
 │   │   │   └── fcFEM.svg
+│   │   ├── output files
+│   │   │   ├── Block_Disp_Control_Example.out
+│   │   │   └── etc.
 │   │   ├── pictures
 │   │   │   ├── Embankment_with_Ditch_Example_Failure_Mechanism.png
 │   │   │   └── etc.
