@@ -172,17 +172,29 @@ def setUpInput(doc, mesh, analysis):
         if not face[1][0]:
             for node in face[0]:
                 dof = 3 * (node - 1)
-                fix[dof] = face[2][0].Value
+                try:
+                    val = face[2][0].Value
+                except:
+                    val = face[2][0]
+                fix[dof] = val
                 fixdof[dof] = 0
         if not face[1][1]:
             for node in face[0]:
                 dof = 3 * (node - 1) + 1
-                fix[dof] = face[2][1].Value
+                try:
+                    val = face[2][1].Value
+                except:
+                    val = face[2][1]
+                fix[dof] = val
                 fixdof[dof] = 0
         if not face[1][2]:
             for node in face[0]:
                 dof = 3 * (node - 1) + 2
-                fix[dof] = face[2][2].Value
+                try:
+                    val = face[2][2].Value
+                except:
+                    val = face[2][2]
+                fix[dof] = val
                 fixdof[dof] = 0
 
     for dof in fix:
@@ -1331,8 +1343,8 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
     # VOLUME MESH FINISH
 
     # Add von Mises Stress and Plastic Strain Ratio to the results
-    rt.add_von_mises(resVol)
-    rt.add_principal_stress_std(resVol)
+    # rt.add_von_mises(resVol)
+    # rt.add_principal_stress_std(resVol)
 
     # trm._TaskPanel.result_obj = resVol
     # trm._TaskPanel.mesh_obj = meshvol
