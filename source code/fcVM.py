@@ -1332,13 +1332,14 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
     resVol.NodeStressXY = tet10stress.T[3].T.tolist()
     resVol.NodeStressXZ = tet10stress.T[4].T.tolist()
     resVol.NodeStressYZ = tet10stress.T[5].T.tolist()
-    # resVol.Peeq = tet10peeq.T.tolist()
     resVol.Peeq = tet10csr.T.tolist()  # a hack until I know how to add a result to the results panel
 
     try:
-        resVol.CriticalStrainRatio = tet10csr.T.tolist()  # works for export to VTK
+        resVol.CriticalStrainRatio = tet10csr.T.tolist()  # FreeCAD 0.21.0 and higher - works for export to VTK
+        resVol.Peeq = tet10peeq.T.tolist()
+
     except:
-        None
+        resVol.Peeq = tet10csr.T.tolist()  # a hack for FreeCAD 0.20.x - store the critical strain ratio in the PEEQ output
 
     resVol.Mesh = result_mesh_object_1
     resVol.NodeNumbers = [int(key) for key in resVol.Mesh.FemMesh.Nodes.keys()]
