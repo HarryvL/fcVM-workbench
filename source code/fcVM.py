@@ -975,6 +975,9 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
                 peeq[ipos1] += DL
                 sig_yield[ipos1] += Et * DL
 
+            if critical_strain < 1.0e-6:
+                critical_strain = 1.0e-6
+
             csr[ipos1] = peeq[ipos1] / critical_strain
 
 
@@ -1331,9 +1334,11 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
     resVol.NodeStressYZ = tet10stress.T[5].T.tolist()
     # resVol.Peeq = tet10peeq.T.tolist()
     resVol.Peeq = tet10csr.T.tolist()  # a hack until I know how to add a result to the results panel
-    resVol.CriticalStrainRatio = tet10csr.T.tolist()  # works for export to VTK
 
-    print("max tet10csr: ", max(tet10csr))
+    try:
+        resVol.CriticalStrainRatio = tet10csr.T.tolist()  # works for export to VTK
+    except:
+        None
 
     resVol.Mesh = result_mesh_object_1
     resVol.NodeNumbers = [int(key) for key in resVol.Mesh.FemMesh.Nodes.keys()]
