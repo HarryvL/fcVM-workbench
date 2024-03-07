@@ -1,5 +1,5 @@
 # fcVM-workbench
-Finite element collapse analysis based on the von Mises plasticity model for use with FreeCAD [FreeCAD](https://freecad.org)
+Finite element collapse analysis based on the von Mises plasticity model for use with [FreeCAD](https://freecad.org)
 
 <img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Embankment_with_Ditch_Example_Load_Displacement.png" height="250"/> <img src="https://github.com/HarryvL/fcVM/blob/main/pictures/Embankment_with_Ditch_Example_Failure_Mechanism.png" height="220" raw=true/> 
 
@@ -69,6 +69,7 @@ fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib and 
 1. \>>> import scipy.sparse
 1. \>>> import sksparse.cholmod
 1. if no problems, quit python and start freecad: (fcVM) C:\"path"> freecad
+1. if you encounter a "black screen" then follow the advice [here](https://forum.freecad.org/viewtopic.php?t=36087&start=40#p669458), i.e. rename all opengl32sw.dll files on your system to opengl32.dll
 
 ### Documentation
 Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
