@@ -761,7 +761,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     if restart == 4:
                         print("MAXIMUM RESTARTS REACHED")
                         fail = True
-                        return disp_new - disp_old, sig_new, peeq, csr, lout, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+                        return disp_new, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
                     restart += 1
                     if step > 0:
                         dl = (lbd[step] - lbd[step - 1]) / scale_re / restart
