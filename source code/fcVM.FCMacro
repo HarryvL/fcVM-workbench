@@ -90,7 +90,8 @@ prn_upd(f"extract information from FreeCAD objects - time taken:  {t1 - t0:7.3f}
 # prepare finite element input
 prn_upd("prepare finite element input\n")
 t0 = time.time()
-elNodes, noCoord, fix, fixdof, movdof, loadFaces, elMat, noce, pressure = ft.setUpInput(doc, mesh, analysis)
+(elNodes, noCoord, fix, fixdof, movdof, elMat, noce, loadFaces, pressure, loadvertices, vertexloads,
+ loadedges, edgeloads, loadfaces_uni, faceloads) = ft.setUpInput(doc, mesh, analysis)
 
 t1 = time.time()
 t[1] = t1 - t0
@@ -99,8 +100,9 @@ prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n"
 # calculate the global stiffness matrix and global load vector
 prn_upd("calculate the GSM and GLV\n")
 t0 = time.time()
-stm, row, col, globalLoadVector, modf = ft.calcGSM(elNodes, noCoord, elMat, fix, loadFaces, grav_x, grav_y, grav_z,
-                                                   pressure)
+stm, row, col, globalLoadVector, modf = ft.calcGSM(elNodes, noCoord, elMat, fix, grav_x, grav_y, grav_z,
+                                                   loadFaces, pressure, loadvertices, vertexloads,
+                                                   loadedges, edgeloads, loadfaces_uni, faceloads)
 
 t1 = time.time()
 t[2] = t1 - t0

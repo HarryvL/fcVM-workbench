@@ -203,6 +203,12 @@ def setUpInput(doc, mesh, analysis):
 
     lf = [[0, 0, 0, 0, 0, 0]]  # load face nodes - signature for numba
     pr = [0.0]  # load face pressure - signature for numba
+    lf_vertex = [[0]]
+    pr_vertex = [[0.0, 0.0, 0.0]]
+    lf_edge = [[0, 0, 0]]
+    pr_edge = [[0.0, 0.0, 0.0]]
+    lf_face = [[0, 0, 0, 0, 0, 0]]
+    pr_face = [[0.0, 0.0, 0.0]]
 
     for obj in App.ActiveDocument.Objects:
         if obj.isDerivedFrom('Fem::ConstraintPressure'):
@@ -221,8 +227,39 @@ def setUpInput(doc, mesh, analysis):
                     else:
                         prn_upd("No Faces with Pressure Loads")
 
+        if obj.isDerivedFrom('Fem::ConstraintForce'):
+            F = obj.Force
+            d = obj.DirectionVector
+            for part, boundaries in obj.References:
+                for boundary in boundaries:
+                    ref = part.Shape.getElement(boundary)
+                    if type(ref) == Part.Vertex:
+                        dp = [F * d.x, F * d.y, F * d.z]
+                        lf_vertex.append(list(mesh.getNodesByVertex(ref)))
+                        pr_vertex.append(dp)
+                    elif type(ref) == Part.Edge:
+                        L = ref.Length
+                        dl = [F * d.x / L, F * d.y / L, F * d.z / L]
+                        for edgeID in mesh.getEdgesByEdge(ref):
+                            lf_edge.append(list(mesh.getElementNodes(edgeID)))
+                            pr_edge.append(dl)
+                    elif type(ref) == Part.Face:
+                        A = ref.Area
+                        dp = [F * d.x / A, F * d.y / A, F * d.z / A]
+                        for faceID in mesh.getFacesByFace(ref):
+                            lf_face.append(list(mesh.getElementNodes(faceID)))
+                            pr_face.append(dp)
+                    else:
+                        prn_upd("No Boundaries Found")
+
     loadfaces = np.array(lf)
     pressure = np.array(pr)
+    loadvertices = np.array(lf_vertex)
+    vertexloads = np.array(pr_vertex)
+    loadedges = np.array(lf_edge)
+    edgeloads = np.array(pr_edge)
+    loadfaces_uni = np.array(lf_face)
+    faceloads = np.array(pr_face)
 
     # re-order element nodes
     for el in elNodes:
@@ -230,7 +267,11 @@ def setUpInput(doc, mesh, analysis):
         el[4], el[6] = el[6], el[4]
         el[8], el[9] = el[9], el[8]
 
-    return (elNodes, nocoord, fix, fixdof, movdof, loadfaces, materialbyElement, noce, pressure)
+    return (elNodes, nocoord, fix, fixdof, movdof, materialbyElement, noce,
+            loadfaces, pressure,
+            loadvertices, vertexloads,
+            loadedges, edgeloads,
+            loadfaces_uni, faceloads)
 
 
 # shape functions for a 4-node tetrahedron - only used for stress interpolation
@@ -424,6 +465,30 @@ def shape6tri(xi, et, xl):
     return xsj, shp, bmat, xx, xt, xp
 
 
+@jit(nopython=True, cache=True)
+def shape2lin(xi, xle):
+    shp = np.zeros((3), dtype=np.float64)
+    dshp = np.zeros((3), dtype=np.float64)
+
+    # shape functions
+    shp[0] = - 0.5 * (1.0 - xi) * xi
+    shp[1] = 0.5 * (1.0 + xi) * xi
+    shp[2] = (1.0 + xi) * (1.0 - xi)
+
+    # local derivatives of the shape functions: xi-derivative
+    dshp[0] = xi - 0.5
+    dshp[1] = xi + 0.5
+    dshp[2] = - 2.0 * xi
+
+    dx_dxi = xle[0][0] * dshp[0] + xle[0][1] * dshp[1] + xle[0][2] * dshp[2]
+    dy_dxi = xle[1][0] * dshp[0] + xle[1][1] * dshp[1] + xle[1][2] * dshp[2]
+    dz_dxi = xle[2][0] * dshp[0] + xle[2][1] * dshp[1] + xle[2][2] * dshp[2]
+
+    xsj = np.sqrt(dx_dxi ** 2 + dy_dxi ** 2 + dz_dxi ** 2)
+
+    return xsj, shp
+
+
 # linear-elastic material stiffness matrix
 
 @jit(nopython=True, cache=True)
@@ -466,7 +531,10 @@ def gaussPoints():
                      0.054975871827661],
                     [0.091576213509771, 0.816847572980458,
                      0.054975871827661]])
-    return gp10, gp6
+    # Gaussian integration points and weights for 3-noded line
+    gp2 = np.array([[-0.5773502691896257, 1.0], [0.5773502691896257, 1.0]])
+
+    return gp10, gp6, gp2
 
 
 # calculate the global stiffness matrix and load vector
@@ -474,8 +542,9 @@ def gaussPoints():
 #     "types.Tuple((float64[:],int64[:], int64[:], float64[:], float64[:]))(int64[:,:], float64[:,:], float64[:,:], DictType(int64,float64), int64[:,:], float64, float64, float64, float64[:])",
 #     nopython=True, cache=True)
 @jit(nopython=True, cache=True)
-def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav_x, grav_y, grav_z, pressure):
-    gp10, gp6 = gaussPoints()
+def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, loadfaces, pressure,
+            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads):
+    gp10, gp6, gp2 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
     nn = len(nocoord[:, 0])  # number of degrees of freedom
 
@@ -485,6 +554,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav_x, grav_y,
     print(f"ne = {ne}")
     print(f"ns = {ns}\n")
 
+    xle = np.zeros((3, 3), dtype=types.float64)  # coordinates of load line nodes
     xlf = np.zeros((3, 6), dtype=types.float64)  # coordinates of load face nodes
     xlv = np.zeros((10, 3), dtype=types.float64)  # coordinates of volume element nodes
     glv = np.zeros((3 * nn), dtype=types.float64)  # global load vector
@@ -521,6 +591,64 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, loadfaces, grav_x, grav_y,
                 for k in range(3):
                     load = shp[nl] * pressure[face + 1] * xp[k] * abs(xsj) * gp6[index][2]
                     glv[iglob3 + k] += load
+                nl += 1
+
+    for vertex in range(len(loadvertices) - 1):  # first vertex is a dummy signature for numba
+        if len(loadvertices) == 1:
+            break
+
+        nd = loadvertices[vertex + 1][0]
+        iglob = nd - 1
+        iglob3 = 3 * iglob
+        glv[iglob3:iglob3 + 3] += vertexloads[vertex + 1]
+
+    for face in range(len(loadfaces_uni) - 1):  # first face is a dummy signature for numba
+        if len(loadfaces_uni) == 1:
+            break
+
+        nda = loadfaces_uni[face + 1]  # node numbers of loaded face
+        for i in range(3):
+            for j in range(6):
+                nd = nda[j]
+                xlf[i][j] = nocoord[nd - 1][i]  # coordinates of loaded face nodes
+
+        # integrate element load vector
+        for index in range(len(gp6)):
+            xi = gp6[index][0]
+            et = gp6[index][1]
+            xsj, shp, bmatS, xx, xt, xp = shape6tri(xi, et, xlf)
+            nl = 0
+            for i in range(len(loadfaces_uni[face] - 1)):
+                nd = loadfaces_uni[face + 1][i]
+                iglob = nd - 1
+                iglob3 = 3 * iglob
+                load = shp[nl] * faceloads[face + 1] * abs(xsj) * gp6[index][2]
+                glv[iglob3:iglob3 + 3] += load
+                nl += 1
+
+    print(loadedges)
+    for edge in range(len(loadedges) - 1):  # first edge is a dummy signature for numba
+        if len(loadedges) == 1:
+            break
+
+        nda = loadedges[edge + 1]  # node numbers of loaded edge
+        print(nda)
+        for i in range(3):
+            for j in range(3):
+                nd = nda[j]
+                xle[i][j] = nocoord[nd - 1][i]  # coordinates of loaded edge nodes
+        print(xle)
+        # integrate element load vector
+        for index in range(len(gp2)):
+            xi = gp2[index][0]
+            xsj, shp = shape2lin(xi, xle)
+            nl = 0
+            for i in range(len(loadedges[edge] - 1)):
+                nd = loadedges[edge + 1][i]
+                iglob = nd - 1
+                iglob3 = 3 * iglob
+                load = shp[nl] * edgeloads[edge + 1] * abs(xsj) * gp2[index][1]
+                glv[iglob3:iglob3 + 3] += load
                 nl += 1
 
     # for each volume element calculate the element stiffness matrix
@@ -655,7 +783,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     lbd = np.zeros(1, dtype=np.float64)  # load level
     rfl = np.zeros(1, dtype=np.float64)  # reaction force level (for displacement control)
 
-    gp10, gp6 = gaussPoints()
+    gp10, gp6, gp2 = gaussPoints()
 
     # determine elastic reaction force on moving boundary
     if max(movdof) == 1:
@@ -1229,7 +1357,7 @@ def mapStresses(elNodes, nocoord, sig, peeq, csr, noce):
     ippeeq = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
     ipcsr = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
 
-    ip10, ip6 = gaussPoints()
+    ip10, ip6, ip2 = gaussPoints()
 
     tet10stress = np.zeros((len(nocoord), 6), dtype=np.float64)
     tet10peeq = np.zeros((len(nocoord)), dtype=np.float64)
