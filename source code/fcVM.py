@@ -626,18 +626,15 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
                 glv[iglob3:iglob3 + 3] += load
                 nl += 1
 
-    print(loadedges)
     for edge in range(len(loadedges) - 1):  # first edge is a dummy signature for numba
         if len(loadedges) == 1:
             break
 
         nda = loadedges[edge + 1]  # node numbers of loaded edge
-        print(nda)
         for i in range(3):
             for j in range(3):
                 nd = nda[j]
                 xle[i][j] = nocoord[nd - 1][i]  # coordinates of loaded edge nodes
-        print(xle)
         # integrate element load vector
         for index in range(len(gp2)):
             xi = gp2[index][0]
