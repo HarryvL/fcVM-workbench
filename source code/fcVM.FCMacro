@@ -28,7 +28,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 mdir = os.path.dirname(dummy.file_path())
-name = App.ActiveDocument.Name
+name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
 
