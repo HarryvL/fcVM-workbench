@@ -20,8 +20,9 @@
 # *                                                                         *
 # ***************************************************************************
 
-
+import os
 import time
+import dummy
 import FemGui
 import ObjectsFem
 import numpy as np
@@ -42,6 +43,10 @@ from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 from femtaskpanels import task_result_mechanical as trm
 
+mdir = os.path.dirname(dummy.file_path())
+name = App.ActiveDocument.Label
+file_path = os.path.join(mdir, "control files", name + '.inp')
+macro_path = os.path.join(mdir, 'source code')
 np.set_printoptions(precision=5, linewidth=300)
 
 
@@ -565,6 +570,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     dof = np.zeros(30, dtype=types.int64)
     dmat = np.zeros((6, 6), dtype=np.float64)
     bmatV = np.zeros((6, 30), dtype=np.float64)
+    x = np.zeros((4 * ne, 3), dtype=np.float64)
 
     #   calculate element load vectors for pressure and add to global vector
 
@@ -669,7 +675,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
                 xlv[j][i] = nocoord[nd - 1][i]
 
         # integrate element matrix
-        for ip in gp10:
+        for i, ip in enumerate(gp10):
             xi = ip[0]
             et = ip[1]
             ze = ip[2]
@@ -680,6 +686,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
             gamma[1::3] += grav_y * density * shp * ip[3] * abs(xsj)
             gamma[2::3] += grav_z * density * shp * ip[3] * abs(xsj)
             V += xsj * ip[3]  # Element volume - not used
+            x[4 * el + i] = np.dot(xlv.T, shp)  #
 
         for i in range(10):
             nd = nodes[i] - 1
@@ -734,7 +741,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     print("loadsumy", loadsumy)
     print("loadsumz", loadsumz, "\n")
 
-    return stm, row, col, glv, modf
+    return stm, row, col, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
 
 
 # calculate load-deflection curve

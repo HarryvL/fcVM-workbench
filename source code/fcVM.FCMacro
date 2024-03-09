@@ -100,9 +100,15 @@ prn_upd(f"prepare finite element input - time taken:  {t1 - t0:7.3f}  seconds\n"
 # calculate the global stiffness matrix and global load vector
 prn_upd("calculate the GSM and GLV\n")
 t0 = time.time()
-stm, row, col, globalLoadVector, modf = ft.calcGSM(elNodes, noCoord, elMat, fix, grav_x, grav_y, grav_z,
-                                                   loadFaces, pressure, loadvertices, vertexloads,
-                                                   loadedges, edgeloads, loadfaces_uni, faceloads)
+stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(elNodes, noCoord, elMat,
+                                                                                               fix, grav_x, grav_y,
+                                                                                               grav_z,
+                                                                                               loadFaces, pressure,
+                                                                                               loadvertices,
+                                                                                               vertexloads,
+                                                                                               loadedges, edgeloads,
+                                                                                               loadfaces_uni,
+                                                                                               faceloads)
 
 t1 = time.time()
 t[2] = t1 - t0
@@ -155,16 +161,29 @@ for entry in timer:
 file_path = os.path.join(mdir, "output files", name + '.out')
 
 with open(file_path, "w") as f:
+    f.write("model name:{0: >30}\n".format(name))
+    f.write("No. of elements:{0: >25}\n".format(ne))
+    f.write("No. of Degrees of freedom:{0: >15}\n".format(nn))
     f.write(
-        "{0: >8}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}{8: >10}\n".format("ip_max", "load",
-                                                                                           "disp", "peeq",
-                                                                                           "pressure", "svmises",
-                                                                                           "triax",
-                                                                                           "eps_cr", "csr_max"))
+        "\n=========================================================================================================================\n\n")
+    f.write("Sum of loads x-direction: {0: >15.2e}\n".format(loadsumx))
+    f.write("Sum of loads y-direction: {0: >15.2e}\n".format(loadsumy))
+    f.write("Sum of loads z-direction: {0: >15.2e}\n".format(loadsumz))
+    f.write(
+        "\n=========================================================================================================================\n\n")
+    f.write(
+        "{0: >8}{1: >10}{2: >10}{3: >10}{4: >10}{5: >10}{6: >10}{7: >10}{8: >10}{9: >10}{10: >10}{11: >10}\n".format(
+            "Gauss point", "x", "y", "z", "load",
+            "disp", "peeq", "pressure", "svmises",
+            "triax", "eps_cr", "csr_max"))
     for i in range(len(crip)):
         f.write(
-            '{0: 8d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}\n'.format(
-                crip[i], lout[i], un[i], peeqplot[i], pplot[i], svmplot[i], triaxplot[i], ecrplot[i], csrplot[i]))
+            '{0: 11d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}{9: >10.2e}{10: >10.2e}{11: >10.2e}\n'.format(
+                crip[i], x[crip[i]][0], x[crip[i]][1], x[crip[i]][2], lout[i], un[i], peeqplot[i], pplot[i], svmplot[i],
+                triaxplot[i], ecrplot[i], csrplot[i]))
+
+    f.write(
+        "\n=========================================================================================================================\n\n")
 
 f.close()
 
