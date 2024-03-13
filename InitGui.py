@@ -128,6 +128,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.scale_1.setValidator(double_validator)
         fcVM_window.scale_2.setValidator(double_validator)
         fcVM_window.scale_3.setValidator(double_validator)
+        fcVM_window.target_LF.setValidator(double_validator)
 
         self.YSinput_default = "240.0"
         self.Hinput_default = "0.0"
@@ -142,6 +143,7 @@ class fcVMWorkbench(Workbench):
         self.scale_1_default = "2.0"
         self.scale_2_default = "1.2"
         self.scale_3_default = "1.2"
+        self.target_LF_default = "2.0"
         self.disp_option_default = "incremental"
 
         self.open_file()
@@ -207,6 +209,7 @@ class fcVMWorkbench(Workbench):
             f.write(self.disp_option + "\n")
             f.write(fcVM_window.USinput.text() + "\n")
             f.write(fcVM_window.Hinput.text() + "\n")
+            f.write(fcVM_window.target_LF.text() + "\n")
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
@@ -237,6 +240,11 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.Hinput.setText(self.Hinput_default)
                 else:
                     fcVM_window.Hinput.setText(Hinp)
+                LFinp = str(f.readline().strip())
+                if LFinp == "":
+                    fcVM_window.target_LF.setText(self.target_LF_default)
+                else:
+                    fcVM_window.target_LF.setText(LFinp)
 
         except FileNotFoundError:
             fcVM_window.YSinput.setText(self.YSinput_default)
@@ -254,6 +262,7 @@ class fcVMWorkbench(Workbench):
             fcVM_window.incrRbtn.setChecked(True)
             fcVM_window.USinput.setText(self.USinput_default)
             fcVM_window.Hinput.setText(self.Hinput_default)
+            fcVM_window.target_LF.setText(self.target_LF_default)
 
     def max_iter_changed(self):
         if (fcVM_window.max_iter.text() != self.max_iter_default):

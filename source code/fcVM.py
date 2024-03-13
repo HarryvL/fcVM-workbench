@@ -38,7 +38,7 @@ from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
 from sksparse.cholmod import cholesky
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, TextBox
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 from femtaskpanels import task_result_mechanical as trm
@@ -747,7 +747,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
              glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
-             ultimate_strain, progress_update, Et_E):
+             ultimate_strain, progress_update, step_update, LF_update, Et_E, target_LF):
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
     t0 = time.perf_counter()
@@ -803,6 +803,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     step = -1
     cnt = True
     fail = False
+    dof_max = np.argmax(np.abs(ue))
 
     un = [0.]
     csrplot = [0.]
@@ -829,18 +830,22 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
     while cnt:
         cnt = False
+        iRiks = True
         pstep = 0
         progress_update(0)
         for _ in (range(nstep)):
             step += 1
             pstep += 1
-            progress_update(int(100 * (pstep + 1) / nstep))
+            step_update(str(pstep))
             restart = 0
-            sig_old = sig_new.copy()
 
             prn_upd("Step: {}".format(step))
             a = du.copy()  # a: Riks control vector
-            lbd = np.append(lbd, lbd[step] + dl)  # lbd: load level
+            if iRiks:
+                sig_old = sig_new.copy()
+                lbd = np.append(lbd, lbd[step] + dl)  # lbd: load level
+            else:
+                lbd[step + 1] = lbd[step] + dl
 
             # update stresses and loads
             qin = np.zeros(3 * len(nocoord), dtype=np.float64)
@@ -870,8 +875,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 factor_time_tot += t1 - t0
 
                 # Riks control correction to load level increment
-                dl = -np.dot(a, due) / np.dot(a, ue)
-                lbd[step + 1] += dl
+                if iRiks:
+                    dl = -np.dot(a, due) / np.dot(a, ue)
+                    lbd[step + 1] += dl
+                else:
+                    dl = 0.0
 
                 # Riks control correction to displacement increment
                 du += due + dl * ue
@@ -907,39 +915,52 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     qin = np.zeros(3 * len(nocoord), dtype=np.float64)
                     update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new,
                                        sig_test, qin, Et_E)
-
                     r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
                     rnorm = np.linalg.norm(r)
                     error = rnorm / qnorm
-
                     iterat = 0
 
-            # update results at end of converged load step
-            disp_old = disp_new.copy()
-            disp_new += du
-            dl = lbd[step + 1] - lbd[step]
-            if max(movdof) == 1:
-                rfl = np.append(rfl, np.sum(movdof * qin))
+            # if abs(lbd[step + 1]) > abs(target_LF) and iRiks:
+            if abs(target_LF - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
+                print("REACHED TARGET LOAD")
+                iRiks = False
+                dl = target_LF - lbd[step]
+                du = dl / (lbd[step + 1] - lbd[step]) * du
+                step -= 1
+                pstep -= 1
+            else:
+                # update results at end of converged load step
+                progress_update(int(100 * (pstep + 1) / nstep))
+                LF_update(str(round(lbd[step + 1], 3)))
+                disp_old = disp_new.copy()
+                disp_new += du
+                dl = lbd[step + 1] - lbd[step]
+                if max(movdof) == 1:
+                    rfl = np.append(rfl, np.sum(movdof * qin))
 
-            if iterat > 10:
-                # scale down
-                dl /= scale_dn
-                du /= scale_dn
-            if iterat < 5:
-                # scale up
-                dl *= scale_up
-                du *= scale_up
-            un.append(np.max(np.abs(disp_new)))
-            update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr, triax,
-                            pressure, sigmises, ecr, Et_E)
-            maxloc = np.argmax(csr)
-            csrplot.append(np.max(csr))
-            crip.append(maxloc)
-            pplot.append(pressure[maxloc])
-            svmplot.append(sigmises[maxloc])
-            triaxplot.append(triax[maxloc])
-            ecrplot.append(ecr[maxloc])
-            peeqplot.append(peeq[maxloc])
+                if iterat > 10:
+                    # scale down
+                    dl /= scale_dn
+                    du /= scale_dn
+                if iterat < 5:
+                    # scale up
+                    dl *= scale_up
+                    du *= scale_up
+
+                # un.append(np.max(np.abs(disp_new)))
+                un.append(disp_new[dof_max])
+                update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
+                                triax,
+                                pressure, sigmises, ecr, Et_E)
+                maxloc = np.argmax(csr)
+                csrplot.append(np.max(csr))
+                crip.append(maxloc)
+                pplot.append(pressure[maxloc])
+                svmplot.append(sigmises[maxloc])
+                triaxplot.append(triax[maxloc])
+                ecrplot.append(ecr[maxloc])
+                peeqplot.append(peeq[maxloc])
+                if not iRiks: break
 
         if max(movdof) == 1:
             lout = rfl
@@ -978,7 +999,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         else:
             ul_limit = 0
 
-        cnt = plot(el_limit, ul_limit, un, lout, csrplot)
+        cnt, dl, du, target_LF = plot(el_limit, ul_limit, un, lout, csrplot, dl, du, target_LF, nstep, ue)
+
+        # print("target_LF: ", target_LF)
+        # print("dl: ", dl)
 
     prn_upd("total time evaluating K_inv * r: {}".format(factor_time_tot))
     prn_upd("total number of iterations: {}".format(iterat_tot))
@@ -998,7 +1022,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
 
 # plot the load-deflection curve
-def plot(el_limit, ul_limit, un, lbd, csrplot):
+def plot(el_limit, ul_limit, un, lbd, csrplot, dl, du, target_LF, nstep, ue):
     class Index(object):
         def stop(self, event):
             self.cnt = False
@@ -1007,6 +1031,22 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
 
         def add(self, event):
             self.cnt = True
+            self.clicked = True
+            print("self.LF: ", self.LF)
+            print("self.target_LF: ", self.target_LF)
+            print("self.target_LF_out: ", self.target_LF_out)
+            cr1 = (self.target_LF - self.LF) * (self.target_LF_out - self.LF) <= 0.0
+            print(cr1)
+            if(cr1):
+                self.dl = np.sign(self.target_LF_out - self.LF) * 1.0 / self.nstep
+                self.du = self.dl * self.ue
+                print("self.dl: ", self.dl)
+            plt.close()
+
+        def rev(self, event):
+            self.cnt = True
+            self.dl = - self.dl
+            self.du = - self.du
             plt.close()
             self.clicked = True
 
@@ -1014,9 +1054,20 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
             if self.cnt == False:
                 self.stop('stop_event')
 
+        def submit(self, LF):
+            self.target_LF_out = float(LF)
+
+    print(len(un), len(lbd))
     callback = Index()
     callback.cnt = False
     callback.clicked = False
+    callback.dl = dl
+    callback.du = du
+    callback.target_LF = target_LF
+    callback.target_LF_out = target_LF
+    callback.LF = lbd[-1]
+    callback.ue = ue
+    callback.nstep = nstep
     fig, ax = plt.subplots(1, 2, figsize=(10, 6))
     fig.canvas.manager.set_window_title('fcVM')
     plt.subplots_adjust(bottom=0.2)
@@ -1026,12 +1077,25 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
     ax[1].set(xlabel='critical strain ratio [-]', title='')
     ax[0].grid()
     ax[1].grid()
-    axstop = plt.axes([0.5 - 0.075 - 0.0075, 0.05, 0.075, 0.06])
-    axadd = plt.axes([0.5 + 0.0075, 0.05, 0.075, 0.06])
+    b_w = 0.075
+    b_h = 0.06
+    b_s = 0.12
+    b_y = 0.05
+    axstop = plt.axes([0.5 - b_w - b_s, b_y, b_w, b_h])
+    axadd = plt.axes([0.5 + b_s, b_y, b_w, b_h])
+    # axstop = plt.axes([0.5 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
+    # axadd = plt.axes([0.5 - b_w / 2.0, b_y, b_w, b_h])
+    # axrev = plt.axes([0.5 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    axbox = plt.axes([0.53, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
     badd.on_clicked(callback.add)
+    # brev = Button(axrev, 'rev')
+    # brev.on_clicked(callback.rev)
+    text_box = TextBox(axbox, "Target Load Factor  ", textalignment="center")
+    text_box.set_val(target_LF)
+    text_box.on_submit(callback.submit)
     fig.canvas.mpl_connect('close_event', callback.close_window)
 
     if ul_limit != 0:
@@ -1053,7 +1117,7 @@ def plot(el_limit, ul_limit, un, lbd, csrplot):
         if callback.clicked:
             break
 
-    return callback.cnt
+    return callback.cnt, callback.dl, callback.du, callback.target_LF_out
 
 
 # update PEEQ and CSR
@@ -1089,10 +1153,18 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
                                      3.0 * (st3 ** 2 + st4 ** 2 + st5 ** 2))
             sig_mises_new = np.sqrt(1.5 * (sn0 ** 2 + sn1 ** 2 + sn2 ** 2) +
                                     3.0 * (sn3 ** 2 + sn4 ** 2 + sn5 ** 2))
-            if sig_mises_new > 0.0:
-                T = p_n / sig_mises_new
-            else:
-                T = 1.0e12
+
+            if (sig_mises_test > sig_yield[ipos1]):
+                DL = (sig_mises_test - sig_yield[ipos1]) / (3.0 * G + H)
+                peeq[ipos1] += DL
+                sig_yield[ipos1] += Et * DL
+
+            # if sig_mises_new > 0.0:
+            #     T = p_n / sig_mises_new
+            # else:
+            #     T = 1.0e12
+
+            T = p_n / sig_yield[ipos1]  # experimental - verify against theory and tests
 
             pressure[ipos1] = p_n
             sigmises[ipos1] = sig_mises_new
@@ -1101,11 +1173,6 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             critical_strain = alpha * np.exp(-beta * T)
 
             ecr[ipos1] = critical_strain
-
-            if (sig_mises_test > sig_yield[ipos1]):
-                DL = (sig_mises_test - sig_yield[ipos1]) / (3.0 * G + H)
-                peeq[ipos1] += DL
-                sig_yield[ipos1] += Et * DL
 
             if critical_strain < 1.0e-6:
                 critical_strain = 1.0e-6
