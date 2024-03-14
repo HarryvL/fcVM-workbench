@@ -38,9 +38,10 @@ from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
 from sksparse.cholmod import cholesky
-from matplotlib.widgets import Button, TextBox
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
+from matplotlib.widgets import Button, TextBox
+from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
 
 mdir = os.path.dirname(dummy.file_path())
@@ -551,7 +552,8 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
             loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads):
     gp10, gp6, gp2 = gaussPoints()
     ne = len(elNodes)  # number of volume elements
-    nn = len(nocoord[:, 0])  # number of degrees of freedom
+    # nn = len(nocoord[:, 0])  # number of degrees of freedom
+    nn = len(nocoord)  # number of degrees of freedom
 
     # number of entries in the lower diagonal of the stiffness matrix: (dof**2 + dof) / 2
     ns = int((30 * 30 + 30) / 2 * ne)
@@ -747,9 +749,16 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
              glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
-             ultimate_strain, progress_update, step_update, LF_update, Et_E, target_LF):
+             ultimate_strain, fcVM_window, Et_E, target_LF):
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
+
+    pr_u = fcVM_window.progressBar.setValue
+    st_u = fcVM_window.Step.setText
+    LF_u = fcVM_window.Load_Factor.setText
+    PQ_u = fcVM_window.PEEQ.setText
+    CR_u = fcVM_window.CSR.setText
+
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
@@ -812,6 +821,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     svmplot = [0.]
     triaxplot = [0.]
     peeqplot = [0.]
+    peeqmax = [0.]
     ecrplot = [0.]
     lout = [0.]
 
@@ -832,11 +842,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         cnt = False
         iRiks = True
         pstep = 0
-        progress_update(0)
+        pr_u(0)
         for _ in (range(nstep)):
             step += 1
             pstep += 1
-            step_update(str(pstep))
+            st_u(str(pstep))
             restart = 0
 
             prn_upd("Step: {}".format(step))
@@ -930,8 +940,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 pstep -= 1
             else:
                 # update results at end of converged load step
-                progress_update(int(100 * (pstep + 1) / nstep))
-                LF_update(str(round(lbd[step + 1], 3)))
+                pr_u(int(100 * (pstep + 1) / nstep))
+                LF_u(str(round(lbd[step + 1], 3)))
                 disp_old = disp_new.copy()
                 disp_new += du
                 dl = lbd[step + 1] - lbd[step]
@@ -960,6 +970,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 triaxplot.append(triax[maxloc])
                 ecrplot.append(ecr[maxloc])
                 peeqplot.append(peeq[maxloc])
+                peeqmax.append(np.max(peeq))
+
+                PQ_u(str(round(max(peeq), 3)))
+                CR_u(str(round(max(csr), 3)))
+
                 if not iRiks: break
 
         if max(movdof) == 1:
@@ -994,12 +1009,21 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         else:
             el_limit = 0
         csr_limit = np.argwhere(np.asarray(csrplot) > 1.0)
-        if len(csr_limit) != 0:
-            ul_limit = csr_limit[0][0] - 1
-        else:
-            ul_limit = 0
+        peeq_limit = np.argwhere(np.asarray(peeqmax) > ultimate_strain)
 
-        cnt, dl, du, target_LF = plot(el_limit, ul_limit, un, lout, csrplot, dl, du, target_LF, nstep, ue)
+        if fcVM_window.csrRbtn.isChecked():
+            if len(csr_limit) != 0:
+                ul_limit = csr_limit[0][0] - 1
+            else:
+                ul_limit = 0
+        else:
+            if len(peeq_limit) != 0:
+                ul_limit = peeq_limit[0][0] - 1
+            else:
+                ul_limit = 0
+
+        cnt, dl, du, target_LF = plot(fcVM_window, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du, target_LF,
+                                      nstep, ue, ultimate_strain)
 
         # print("target_LF: ", target_LF)
         # print("dl: ", dl)
@@ -1022,7 +1046,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
 
 # plot the load-deflection curve
-def plot(el_limit, ul_limit, un, lbd, csrplot, dl, du, target_LF, nstep, ue):
+def plot(fcVM, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, target_LF, nstep, ue, ultimate_strain):
     class Index(object):
         def stop(self, event):
             self.cnt = False
@@ -1037,7 +1061,7 @@ def plot(el_limit, ul_limit, un, lbd, csrplot, dl, du, target_LF, nstep, ue):
             print("self.target_LF_out: ", self.target_LF_out)
             cr1 = (self.target_LF - self.LF) * (self.target_LF_out - self.LF) <= 0.0
             print(cr1)
-            if(cr1):
+            if (cr1):
                 self.dl = np.sign(self.target_LF_out - self.LF) * 1.0 / self.nstep
                 self.du = self.dl * self.ue
                 print("self.dl: ", self.dl)
@@ -1069,46 +1093,64 @@ def plot(el_limit, ul_limit, un, lbd, csrplot, dl, du, target_LF, nstep, ue):
     callback.ue = ue
     callback.nstep = nstep
     fig, ax = plt.subplots(1, 2, figsize=(10, 6))
+    ax[1].xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
     fig.canvas.manager.set_window_title('fcVM')
     plt.subplots_adjust(bottom=0.2)
     ax[0].plot(un, lbd, '-ok')
     ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-] or load [N]', title='')
-    ax[1].plot(csrplot, lbd, '-ok')
-    ax[1].set(xlabel='critical strain ratio [-]', title='')
+    if fcVM.csrRbtn.isChecked():
+        ax[1].set(xlabel='critical strain ratio [-]', title='')
+        ax[1].plot(csrplot, lbd, '-ok')
+    else:
+        ax[1].set(xlabel='equivalent plastic strain (PEEQ) [-]', title='')
+        ax[1].plot(peeqmax, lbd, '-ok')
     ax[0].grid()
     ax[1].grid()
     b_w = 0.075
     b_h = 0.06
-    b_s = 0.12
+    b_s = 0.01
     b_y = 0.05
-    axstop = plt.axes([0.5 - b_w - b_s, b_y, b_w, b_h])
-    axadd = plt.axes([0.5 + b_s, b_y, b_w, b_h])
-    # axstop = plt.axes([0.5 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
-    # axadd = plt.axes([0.5 - b_w / 2.0, b_y, b_w, b_h])
-    # axrev = plt.axes([0.5 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
-    axbox = plt.axes([0.53, b_y, b_w, b_h])
+    # axstop = plt.axes([0.5 - b_w - b_s, b_y, b_w, b_h])
+    # axadd = plt.axes([0.5 + b_s, b_y, b_w, b_h])
+    axstop = plt.axes([0.5 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
+    axadd = plt.axes([0.5 - b_w / 2.0, b_y, b_w, b_h])
+    axbox = plt.axes([0.5 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    # axbox = plt.axes([0.53, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
     badd.on_clicked(callback.add)
     # brev = Button(axrev, 'rev')
     # brev.on_clicked(callback.rev)
-    text_box = TextBox(axbox, "Target Load Factor  ", textalignment="center")
+    text_box = TextBox(axbox, "", textalignment="center")
     text_box.set_val(target_LF)
     text_box.on_submit(callback.submit)
+    fig.text(0.5 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
     fig.canvas.mpl_connect('close_event', callback.close_window)
 
     if ul_limit != 0:
-        fac = (1.0 - csrplot[ul_limit]) / (csrplot[ul_limit + 1] - csrplot[ul_limit])
-        lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
-        un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
-        ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
-        ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
-        ax[0].plot([un[el_limit], un[el_limit]], [0.0, lbd[el_limit]], color='b', linestyle="--")
-        ax[0].plot([0.0, un[el_limit]], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
-        ax[1].plot([0.0, 1.0], [lbd_limit, lbd_limit], color='r', linestyle="--")
-        ax[1].plot([1.0, 1.0], [0.0, lbd_limit], color='r', linestyle="--")
-        ax[1].plot([0.0, 1.0], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
+        if fcVM.csrRbtn.isChecked():
+            fac = (1.0 - csrplot[ul_limit]) / (csrplot[ul_limit + 1] - csrplot[ul_limit])
+            lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
+            un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
+            ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
+            ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
+            ax[0].plot([un[el_limit], un[el_limit]], [0.0, lbd[el_limit]], color='b', linestyle="--")
+            ax[0].plot([0.0, un[el_limit]], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
+            ax[1].plot([0.0, 1.0], [lbd_limit, lbd_limit], color='r', linestyle="--")
+            ax[1].plot([1.0, 1.0], [0.0, lbd_limit], color='r', linestyle="--")
+            ax[1].plot([0.0, 1.0], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
+        else:
+            fac = (ultimate_strain - peeqmax[ul_limit]) / (peeqmax[ul_limit + 1] - peeqmax[ul_limit])
+            lbd_limit = lbd[ul_limit] + fac * (lbd[ul_limit + 1] - lbd[ul_limit])
+            un_limit = un[ul_limit] + fac * (un[ul_limit + 1] - un[ul_limit])
+            ax[0].plot([0.0, un_limit], [lbd_limit, lbd_limit], color='r', linestyle="--")
+            ax[0].plot([un_limit, un_limit], [0.0, lbd_limit], color='r', linestyle="--")
+            ax[0].plot([un[el_limit], un[el_limit]], [0.0, lbd[el_limit]], color='b', linestyle="--")
+            ax[0].plot([0.0, un[el_limit]], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
+            ax[1].plot([0.0, ultimate_strain], [lbd_limit, lbd_limit], color='r', linestyle="--")
+            ax[1].plot([ultimate_strain, ultimate_strain], [0.0, lbd_limit], color='r', linestyle="--")
+            ax[1].plot([0.0, ultimate_strain], [lbd[el_limit], lbd[el_limit]], color='b', linestyle="--")
 
     plt.show()
 

@@ -34,14 +34,11 @@ macro_path = os.path.join(mdir, 'source code')
 
 global progress_update
 
-progress_update = fcVM_window.progressBar.setValue
-progress_update(0)
-
-step_update = fcVM_window.Step.setText
-step_update("0")
-
-LF_update = fcVM_window.Load_Factor.setText
-LF_update("0.0")
+fcVM_window.progressBar.setValue(0)
+fcVM_window.Step.setText("0")
+fcVM_window.Load_Factor.setText("0.000")
+fcVM_window.PEEQ.setText("0.000")
+fcVM_window.CSR.setText("0.000")
 
 def prn_upd(*args):
     for obj in args:
@@ -129,7 +126,7 @@ displacements, stresses, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, tr
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-    ultimate_strain, progress_update, step_update, LF_update, Et_E, target_LF)
+    ultimate_strain, fcVM_window, Et_E, target_LF)
 
 t1 = time.time()
 t[3] = t1 - t0
@@ -193,6 +190,6 @@ with open(file_path, "w") as f:
 
 f.close()
 
-progress_update(0)
-step_update("0")
-LF_update("0.0")
+fcVM_window.progressBar.setValue(0)
+fcVM_window.Step.setText("0")
+fcVM_window.Load_Factor.setText("0.000")

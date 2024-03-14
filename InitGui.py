@@ -79,6 +79,8 @@ class fcVMWorkbench(Workbench):
 
         self.disp_option = "incremental"
 
+        self.csr_option = "PEEQ"
+
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
                 self.workbench_instance = workbench_instance
@@ -88,6 +90,8 @@ class fcVMWorkbench(Workbench):
                     self.workbench_instance.save_clicked()
                     self.workbench_instance.file_name = FreeCAD.activeDocument().Label
                     self.workbench_instance.open_file()
+                    fcVM_window.PEEQ.setText("0.000")
+                    fcVM_window.CSR.setText("0.000")
 
             def slotFinishSaveDocument(self, doc, prop):
                 self.workbench_instance.save_clicked()  # save under old file name
@@ -107,6 +111,8 @@ class fcVMWorkbench(Workbench):
         fcVM_window.saveBtn.clicked.connect(self.save_clicked)
         fcVM_window.totalRbtn.toggled.connect(self.btn_state)
         fcVM_window.incrRbtn.toggled.connect(self.btn_state)
+        fcVM_window.peeqRbtn.toggled.connect(self.btn_state)
+        fcVM_window.csrRbtn.toggled.connect(self.btn_state)
 
         fcVM_window.max_iter.textChanged.connect(self.max_iter_changed)
         fcVM_window.relax.textChanged.connect(self.relax_changed)
@@ -145,6 +151,7 @@ class fcVMWorkbench(Workbench):
         self.scale_3_default = "1.2"
         self.target_LF_default = "2.0"
         self.disp_option_default = "incremental"
+        self.csr_option_default = "PEEQ"
 
         self.open_file()
 
@@ -210,6 +217,7 @@ class fcVMWorkbench(Workbench):
             f.write(fcVM_window.USinput.text() + "\n")
             f.write(fcVM_window.Hinput.text() + "\n")
             f.write(fcVM_window.target_LF.text() + "\n")
+            f.write(self.csr_option + "\n")
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
@@ -245,6 +253,12 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.target_LF.setText(self.target_LF_default)
                 else:
                     fcVM_window.target_LF.setText(LFinp)
+                csrBtninp = f.readline().strip()
+                if csrBtninp == "CSR":
+                    fcVM_window.csrRbtn.setChecked(True)
+                else:
+                    fcVM_window.peeqRbtn.setChecked(True)
+
 
         except FileNotFoundError:
             fcVM_window.YSinput.setText(self.YSinput_default)
@@ -327,6 +341,10 @@ class fcVMWorkbench(Workbench):
             self.disp_option = "total"
         if fcVM_window.incrRbtn.isChecked():
             self.disp_option = "incremental"
+        if fcVM_window.peeqRbtn.isChecked():
+            self.csr_option = "PEEQ"
+        if fcVM_window.csrRbtn.isChecked():
+            self.csr_option = "CSR"
 
 
 FreeCADGui.addWorkbench(fcVMWorkbench)
