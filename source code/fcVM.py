@@ -1196,6 +1196,7 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             sig_mises_new = np.sqrt(1.5 * (sn0 ** 2 + sn1 ** 2 + sn2 ** 2) +
                                     3.0 * (sn3 ** 2 + sn4 ** 2 + sn5 ** 2))
 
+            DL = 0.0
             if (sig_mises_test > sig_yield[ipos1]):
                 DL = (sig_mises_test - sig_yield[ipos1]) / (3.0 * G + H)
                 peeq[ipos1] += DL
@@ -1219,7 +1220,7 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             if critical_strain < 1.0e-6:
                 critical_strain = 1.0e-6
 
-            csr[ipos1] = peeq[ipos1] / critical_strain
+            csr[ipos1] += DL / critical_strain
 
 
 # update stresses and loads
