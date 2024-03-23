@@ -126,7 +126,7 @@ displacements, stresses, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, tr
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-    ultimate_strain, fcVM_window, Et_E, target_LF)
+    ultimate_strain, fcVM_window, Et_E, target_LF, x)
 
 t1 = time.time()
 t[3] = t1 - t0
