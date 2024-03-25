@@ -45,6 +45,8 @@ global double_validator
 double_validator = QtGui.QDoubleValidator()
 global int_validator
 int_validator = QtGui.QIntValidator()
+global res_show
+res_show = FreeCAD.getHomePath() + "Mod/Fem/Resources/ui/ResultShow.ui"
 
 
 class fcVMWorkbench(Workbench):
@@ -68,6 +70,14 @@ class fcVMWorkbench(Workbench):
     def Activated(self):
         from PySide2 import QtCore
         global fcVM_window
+
+        # Replace Temperature with Critical Strain Ratio
+        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
+        with open(res_show, 'r') as file:
+            filedata = file.read()
+        filedata = filedata.replace('Temperature', 'Critical Strain Ratio')
+        with open(res_show, 'w') as file:
+            file.write(filedata)
 
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
@@ -160,6 +170,15 @@ class fcVMWorkbench(Workbench):
     def Deactivated(self):
 
         FreeCAD.removeDocumentObserver(self.obs)
+
+
+        # Replace Critical Strain Ratio with Temperature
+        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
+        with open(res_show, 'r') as file:
+            filedata = file.read()
+        filedata = filedata.replace('Critical Strain Ratio', 'Temperature')
+        with open(res_show, 'w') as file:
+            file.write(filedata)
 
         try:
             if fcVM_window.dw.isVisible():
