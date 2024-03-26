@@ -54,6 +54,9 @@ class fcVMWorkbench(Workbench):
     MenuText = "fcVM workbench"
     ToolTip = "Plastic collapse analysis with the von Mises material model"
 
+    def __init__(self):
+        self.remove_csr()
+
     def GetClassName(self):
         return "Gui::PythonWorkbench"
 
@@ -71,14 +74,6 @@ class fcVMWorkbench(Workbench):
         from PySide2 import QtCore
         global fcVM_window
 
-        # Replace Temperature with Critical Strain Ratio
-        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
-        with open(res_show, 'r') as file:
-            filedata = file.read()
-        filedata = filedata.replace('Temperature', 'Critical Strain Ratio')
-        with open(res_show, 'w') as file:
-            file.write(filedata)
-
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
             self.doc = FreeCAD.newDocument("fcVM")
@@ -90,6 +85,8 @@ class fcVMWorkbench(Workbench):
         self.disp_option = "incremental"
 
         self.csr_option = "PEEQ"
+
+        self.add_csr()
 
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
@@ -169,22 +166,15 @@ class fcVMWorkbench(Workbench):
 
     def Deactivated(self):
 
-        FreeCAD.removeDocumentObserver(self.obs)
-
-
-        # Replace Critical Strain Ratio with Temperature
-        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
-        with open(res_show, 'r') as file:
-            filedata = file.read()
-        filedata = filedata.replace('Critical Strain Ratio', 'Temperature')
-        with open(res_show, 'w') as file:
-            file.write(filedata)
-
         try:
             if fcVM_window.dw.isVisible():
                 fcVM_window.dw.setVisible(False)
         except Exception:
             None
+
+        self.remove_csr()
+
+        FreeCAD.removeDocumentObserver(self.obs)
 
     def start_clicked(self):
         from PySide2 import QtWidgets
@@ -364,6 +354,28 @@ class fcVMWorkbench(Workbench):
             self.csr_option = "PEEQ"
         if fcVM_window.csrRbtn.isChecked():
             self.csr_option = "CSR"
+
+    def add_csr(self):
+
+        # print("add_csr called")
+        # Replace Temperature with Critical Strain Ratio
+        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
+        with open(res_show, 'r') as file:
+            filedata = file.read()
+        filedata = filedata.replace('Temperature', 'Critical Strain Ratio')
+        with open(res_show, 'w') as file:
+            file.write(filedata)
+
+    def remove_csr(self):
+
+        # print("remove_csr called")
+        # Replace Critical Strain Ratio with Temperature
+        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
+        with open(res_show, 'r') as file:
+            filedata = file.read()
+        filedata = filedata.replace('Critical Strain Ratio', 'Temperature')
+        with open(res_show, 'w') as file:
+            file.write(filedata)
 
 
 FreeCADGui.addWorkbench(fcVMWorkbench)
