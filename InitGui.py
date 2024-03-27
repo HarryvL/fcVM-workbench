@@ -32,6 +32,7 @@ __Requires__ = "freecad version 0.19 or higher"
 __Communication__ = "https://forum.freecad.org/viewtopic.php?t=85474"
 
 import os
+import sys
 import dummy
 import FreeCAD
 import FreeCADGui
@@ -47,6 +48,12 @@ global int_validator
 int_validator = QtGui.QIntValidator()
 global res_show
 res_show = FreeCAD.getHomePath() + "Mod/Fem/Resources/ui/ResultShow.ui"
+global trm
+trm = FreeCAD.getHomePath() + "Mod/Fem/femtaskpanels/Task_Resul_Mechanical.py"
+global source_code_path
+source_code_path = os.path.join(dir_name, 'source code')
+
+sys.path.append(source_code_path)
 
 
 class fcVMWorkbench(Workbench):
@@ -55,7 +62,8 @@ class fcVMWorkbench(Workbench):
     ToolTip = "Plastic collapse analysis with the von Mises material model"
 
     def __init__(self):
-        self.remove_csr()
+        import task_result_mechanical
+        sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
 
     def GetClassName(self):
         return "Gui::PythonWorkbench"
@@ -79,14 +87,12 @@ class fcVMWorkbench(Workbench):
             self.doc = FreeCAD.newDocument("fcVM")
 
         self.file_name = self.doc.Label
-        # print("self.file_name: ", self.file_name)
+
         self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
 
         self.disp_option = "incremental"
 
         self.csr_option = "PEEQ"
-
-        self.add_csr()
 
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
@@ -172,8 +178,6 @@ class fcVMWorkbench(Workbench):
         except Exception:
             None
 
-        self.remove_csr()
-
         FreeCAD.removeDocumentObserver(self.obs)
 
     def start_clicked(self):
@@ -209,7 +213,6 @@ class fcVMWorkbench(Workbench):
     def save_clicked(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
 
-        # print("save file: ", inp_file_path)
         with open(inp_file_path, "w") as f:
             f.write(fcVM_window.YSinput.text() + "\n")
             f.write(fcVM_window.GXinput.text() + "\n")
@@ -354,28 +357,6 @@ class fcVMWorkbench(Workbench):
             self.csr_option = "PEEQ"
         if fcVM_window.csrRbtn.isChecked():
             self.csr_option = "CSR"
-
-    def add_csr(self):
-
-        # print("add_csr called")
-        # Replace Temperature with Critical Strain Ratio
-        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
-        with open(res_show, 'r') as file:
-            filedata = file.read()
-        filedata = filedata.replace('Temperature', 'Critical Strain Ratio')
-        with open(res_show, 'w') as file:
-            file.write(filedata)
-
-    def remove_csr(self):
-
-        # print("remove_csr called")
-        # Replace Critical Strain Ratio with Temperature
-        # TODO: Remove once Critical Strain Ratio is added to task_result_mechanical.py
-        with open(res_show, 'r') as file:
-            filedata = file.read()
-        filedata = filedata.replace('Critical Strain Ratio', 'Temperature')
-        with open(res_show, 'w') as file:
-            file.write(filedata)
 
 
 FreeCADGui.addWorkbench(fcVMWorkbench)
