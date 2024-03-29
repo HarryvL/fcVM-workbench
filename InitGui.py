@@ -48,8 +48,6 @@ global int_validator
 int_validator = QtGui.QIntValidator()
 global res_show
 res_show = FreeCAD.getHomePath() + "Mod/Fem/Resources/ui/ResultShow.ui"
-global trm
-trm = FreeCAD.getHomePath() + "Mod/Fem/femtaskpanels/Task_Resul_Mechanical.py"
 global source_code_path
 source_code_path = os.path.join(dir_name, 'source code')
 
@@ -94,6 +92,8 @@ class fcVMWorkbench(Workbench):
 
         self.csr_option = "PEEQ"
 
+        self.averaged_opion = "unaveraged"
+
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
                 self.workbench_instance = workbench_instance
@@ -126,6 +126,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.incrRbtn.toggled.connect(self.btn_state)
         fcVM_window.peeqRbtn.toggled.connect(self.btn_state)
         fcVM_window.csrRbtn.toggled.connect(self.btn_state)
+        fcVM_window.averagedChk.toggled.connect(self.btn_state)
 
         fcVM_window.max_iter.textChanged.connect(self.max_iter_changed)
         fcVM_window.relax.textChanged.connect(self.relax_changed)
@@ -165,6 +166,7 @@ class fcVMWorkbench(Workbench):
         self.target_LF_default = "2.0"
         self.disp_option_default = "incremental"
         self.csr_option_default = "PEEQ"
+        self.averaged_Chk_default = "unaveraged"
 
         self.open_file()
 
@@ -209,6 +211,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.scale_2.setPalette(self.palette_standard)
         fcVM_window.scale_3.setPalette(self.palette_standard)
         fcVM_window.incrRbtn.setChecked(True)
+        fcVM_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
@@ -230,6 +233,7 @@ class fcVMWorkbench(Workbench):
             f.write(fcVM_window.Hinput.text() + "\n")
             f.write(fcVM_window.target_LF.text() + "\n")
             f.write(self.csr_option + "\n")
+            f.write(self.averaged_opion + "\n")
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
@@ -270,6 +274,10 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.csrRbtn.setChecked(True)
                 else:
                     fcVM_window.peeqRbtn.setChecked(True)
+                if str(f.readline().strip()) == "averaged":
+                    fcVM_window.averagedChk.setChecked(True)
+                else:
+                    fcVM_window.averagedChk.setChecked(False)
 
 
         except FileNotFoundError:
@@ -289,6 +297,7 @@ class fcVMWorkbench(Workbench):
             fcVM_window.USinput.setText(self.USinput_default)
             fcVM_window.Hinput.setText(self.Hinput_default)
             fcVM_window.target_LF.setText(self.target_LF_default)
+            fcVM_window.averagedChk.setChecked(False)
 
     def max_iter_changed(self):
         if (fcVM_window.max_iter.text() != self.max_iter_default):
@@ -357,6 +366,11 @@ class fcVMWorkbench(Workbench):
             self.csr_option = "PEEQ"
         if fcVM_window.csrRbtn.isChecked():
             self.csr_option = "CSR"
+        if fcVM_window.averagedChk.isChecked():
+            self.averaged_opion = "averaged"
+            print("checked")
+        else:
+            self.averaged_option = "unaveraged"
 
 
 FreeCADGui.addWorkbench(fcVMWorkbench)

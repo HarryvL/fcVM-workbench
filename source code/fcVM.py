@@ -789,10 +789,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     sig_yield = np.full(4 * nelem, sig_yield_inp, dtype=np.float64)  # yield stress in Tet10
     sig_test = np.zeros(24 * nelem, dtype=np.float64)
     peeq = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
-    triax = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
-    pressure = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
-    sigmises = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
-    ecr = np.zeros(4 * nelem, dtype=np.float64)  # equivalent plastic strain in Tet10
+    triax = np.zeros(4 * nelem, dtype=np.float64)  # triaxiality in Tet10
+    pressure = np.zeros(4 * nelem, dtype=np.float64)  # pressure in Tet10
+    sigmises = np.zeros(4 * nelem, dtype=np.float64)  # von Mises stress in Tet10
+    ecr = np.zeros(4 * nelem, dtype=np.float64)  # critical plastic strain in Tet10
     csr = np.zeros(4 * nelem, dtype=np.float64)  # critical strain ratio in Tet10
     disp_new = np.zeros(ndof, dtype=np.float64)  # displacement results
     disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
@@ -919,7 +919,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     if restart == 4:
                         print("MAXIMUM RESTARTS REACHED")
                         fail = True
-                        return disp_new, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+                        return disp_new, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
                     restart += 1
                     if step > 0:
                         dl = (lbd[step] - lbd[step - 1]) / scale_re / restart
@@ -1056,9 +1056,9 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
     else:
-        return disp_new - disp_old, sig_new, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new - disp_old, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
 
 
 # plot the load-deflection curve
@@ -1230,7 +1230,6 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             triax[ipos1] = T
 
             critical_strain = alpha * np.exp(-beta * T)
-
 
             if critical_strain < 1.0e-6:
                 critical_strain = 1.0e-6
@@ -1470,7 +1469,7 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
 
 # map stresses to nodes
-def mapStresses(elNodes, nocoord, sig, peeq, csr, noce):
+def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
     # map maps corner node stresses to all tet10 nodes
     map_inter = np.array([[1.0, 0.0, 0.0, 0.0],
                           [0.0, 1.0, 0.0, 0.0],
@@ -1487,12 +1486,14 @@ def mapStresses(elNodes, nocoord, sig, peeq, csr, noce):
     ipstress = np.zeros((4, 6), dtype=np.float64)  # Tet10 stresses by Gauss point (4 GP and 6 components)
     ippeeq = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
     ipcsr = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
+    ipsvm = np.zeros((4, 1), dtype=np.float64)  # Tet10 von Mises stress by Gauss point (4 GP and 1 component)
 
     ip10, ip6, ip2 = gaussPoints()
 
     tet10stress = np.zeros((len(nocoord), 6), dtype=np.float64)
     tet10peeq = np.zeros((len(nocoord)), dtype=np.float64)
     tet10csr = np.zeros((len(nocoord)), dtype=np.float64)
+    tet10svm = np.zeros((len(nocoord)), dtype=np.float64)
 
     # map stresses in volumes to nodal points
     for el, nodes in enumerate(elNodes):
@@ -1508,44 +1509,61 @@ def mapStresses(elNodes, nocoord, sig, peeq, csr, noce):
             ipposeq = elposeq + index
             ipstress[index] = sig[ippos:ippos + 6]  # ipstress (4x6): 6 stress components for 4 integration points
             ippeeq[index] = peeq[ipposeq]  # ippeeq (4x1): 1 strain component for 4 integration points
-            ipcsr[index] = csr[ipposeq]  # ippeeq (4x1): 1 strain component for 4 integration points
+            ipcsr[index] = csr[ipposeq]  # ipcsr (4x1): 1 strain component for 4 integration points
+            ipsvm[index] = sigvm[ipposeq]  # ipsigvm (4x1): 1 von Mises stress component for 4 integration points
             for i in range(4):
                 expm[index, i] = shp[i]
         expm_inv = np.linalg.inv(expm)
         npstress4 = np.dot(expm_inv, ipstress)  # npstress4 (4x6): for each corner node (4) all stress components (6)
         nppeeq4 = np.dot(expm_inv, ippeeq)  # nppeeq (4x1): for each corner node (4) one strain component (1)
         npcsr4 = np.dot(expm_inv, ipcsr)  # csr (4x1): for each corner node (4) one csr component (1)
+        npsvm4 = np.dot(expm_inv, ipsvm)  # csr (4x1): for each corner node (4) one csr component (1)
 
-        # averaged results over all connecting nodes
         numnodes = np.array(
             [noce[nodes[n] - 1] for n in range(10)])  # numnodes = number of elements connected to node "nodes[n]-1"
         npstress10 = np.divide(np.dot(map_inter, npstress4).T,
                                numnodes).T  # nodal point stress all nodes divided by number of connecting elements
-        # nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
-        #                      numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
-        # npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
-        #                     numnodes).T  # nodal point csr all nodes divided by number of connecting elements
         for index, nd in enumerate(nodes):
             tet10stress[nd - 1] += npstress10[index]
-        #     tet10peeq[nd - 1] += nppeeq10[index]
-        #     tet10csr[nd - 1] += npcsr10[index]
 
-        # maximum results over all connecting nodes
-        # npstress10 = np.dot(map_inter, npstress4)  # maximum nodal point stress
-        nppeeq10 = np.dot(map_inter, nppeeq4)  # maximum nodal point peeq
-        npcsr10 = np.dot(map_inter, npcsr4)  # maximum nodal point csr
-        for index, nd in enumerate(nodes):
-            # for i in range(6):
-            #     if abs(npstress10[index][i]) > abs(tet10stress[nd - 1][i]):
-            #         tet10stress[nd - 1][i] = npstress10[index][i]
-            tet10peeq[nd - 1] = max(tet10peeq[nd - 1], nppeeq10[index])
-            tet10csr[nd - 1] = max(tet10csr[nd - 1], npcsr10[index])
+        if fcVM.averagedChk.isChecked():
+            # averaged results over all connecting nodes
+            print("averaged checked")
+            nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
+                                 numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
+            npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
+                                numnodes).T  # nodal point csr all nodes divided by number of connecting elements
+            npsvm10 = np.divide(np.dot(map_inter, npsvm4).T,
+                                numnodes).T  # nodal point csr all nodes divided by number of connecting elements
+            for index, nd in enumerate(nodes):
+                tet10peeq[nd - 1] += nppeeq10[index]
+                tet10csr[nd - 1] += npcsr10[index]
+                tet10svm[nd - 1] += npsvm10[index]
+        else:
+            # maximum results corner nodes
+            print("averaged unchecked")
+            nppeeq10 = np.dot(map_inter, nppeeq4)  # nodal point peeq
+            npcsr10 = np.dot(map_inter, npcsr4)  # nodal point csr
+            npsvm10 = np.dot(map_inter, npsvm4)  # nodal point von Mises stress
 
-    return tet10stress, tet10peeq, tet10csr
+            for index, nd in enumerate(nodes[0:4]):
+                tet10peeq[nd - 1] = max(tet10peeq[nd - 1], nppeeq10[index])
+                tet10csr[nd - 1] = max(tet10csr[nd - 1], npcsr10[index])
+                tet10svm[nd - 1] = max(tet10svm[nd - 1], npsvm10[index])
+
+    # results intermediate nodes
+    for el, nodes in enumerate(elNodes):
+        nd_corner = nodes[0:4]
+        nd_inter = nodes[4:10]
+        tet10peeq[nd_inter - 1] = np.dot(map_inter[4:10], tet10peeq[nd_corner - 1])
+        tet10csr[nd_inter - 1] = np.dot(map_inter[4:10], tet10csr[nd_corner - 1])
+        tet10svm[nd_inter - 1] = np.dot(map_inter[4:10], tet10svm[nd_corner - 1])
+
+    return tet10stress, tet10peeq, tet10csr, tet10svm
 
 
 # fill resultobject with results
-def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
+def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm):
     analysis = doc.getObject("Analysis")
 
     if analysis is None:
@@ -1609,24 +1627,26 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
         resVol.CriticalStrainRatio = tet10csr.T.tolist()  # FreeCAD 0.21.0 and higher - works for export to VTK
         resVol.Peeq = tet10peeq.T.tolist()
         resVol.Temperature = tet10csr.T.tolist()
+        resVol.vonMises = tet10svm.T.tolist()
 
     except:
         resVol.Peeq = tet10csr.T.tolist()  # a hack for FreeCAD 0.20.x - store the critical strain ratio in the PEEQ output
         resVol.Temperature = tet10csr.T.tolist()
+        resVol.vonMises = tet10svm.T.tolist()
 
-    # resVol.Stats = [min(dis[0::3]), max(dis[0::3]),
-    #                 min(dis[1::3]), max(dis[1::3]),
-    #                 min(dis[2::3]), max(dis[2::3]),
-    #                 min(resVol.DisplacementLengths), max(resVol.DisplacementLengths),
-    #                 0.0, 0.0,
-    #                 0.0, 0.0,
-    #                 0.0, 0.0,
-    #                 0.0, 0.0,
-    #                 0.0, 0.0,
-    #                 min(resVol.Peeq), max(resVol.Peeq),
-    #                 min(resVol.Temperature), max(resVol.Temperature),
-    #                 0.0, 0.0,
-    #                 0.0, 0.0]
+    resVol.Stats = [min(dis[0::3]), max(dis[0::3]),
+                    min(dis[1::3]), max(dis[1::3]),
+                    min(dis[2::3]), max(dis[2::3]),
+                    min(resVol.DisplacementLengths), max(resVol.DisplacementLengths),
+                    min(resVol.vonMises), max(resVol.vonMises),
+                    0.0, 0.0,
+                    0.0, 0.0,
+                    0.0, 0.0,
+                    0.0, 0.0,
+                    min(resVol.Peeq), max(resVol.Peeq),
+                    min(resVol.Temperature), max(resVol.Temperature),
+                    0.0, 0.0,
+                    0.0, 0.0]
 
     resVol.Mesh = result_mesh_object_1
     resVol.NodeNumbers = [int(key) for key in resVol.Mesh.FemMesh.Nodes.keys()]
@@ -1636,10 +1656,10 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr):
     # VOLUME MESH FINISH
 
     # Add von Mises Stress and Plastic Strain Ratio to the results
-    rt.add_von_mises(resVol)
-    rt.add_principal_stress_std(resVol)
-
-    rt.fill_femresult_stats(resVol)
+    # rt.add_von_mises(resVol)
+    # rt.add_principal_stress_std(resVol)
+    #
+    # rt.fill_femresult_stats(resVol)
 
     trm._TaskPanel.result_obj = resVol
     trm._TaskPanel.mesh_obj = meshvol

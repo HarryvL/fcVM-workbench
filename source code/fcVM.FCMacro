@@ -77,7 +77,8 @@ try:
         ultimate_strain = float(f.readline().strip())
         Et_E = float(f.readline().strip())
         target_LF = float(f.readline().strip())
-
+        csr_option = f.readline().strip()
+        averaged_option = f.readline().strip()
 
 except:
     print("file not found")
@@ -122,7 +123,7 @@ prn_upd("solve the global stiffness matrix equation\n")
 Gui.updateGui()
 t0 = time.time()
 
-displacements, stresses, peeq, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
+displacements, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
@@ -136,7 +137,7 @@ if not fail:
     # map stresses to nodal points
     prn_upd("map stresses and strains to nodal points\n")
     t0 = time.time()
-    tet10stress, tet10peeq, tet10csr = ft.mapStresses(elNodes, noCoord, stresses, peeq, csr, noce)
+    tet10stress, tet10peeq, tet10csr, tet10svm = ft.mapStresses(fcVM_window, elNodes, noCoord, stresses, peeq, sigmises, csr, noce)
     t1 = time.time()
     t[4] = t1 - t0
 
@@ -145,7 +146,7 @@ if not fail:
     # paste results in the FEM result object
     prn_upd("paste results in the FEM result object\n")
     t0 = time.time()
-    resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr)
+    resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm)
     t1 = time.time()
     t[5] = t1 - t0
     prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
