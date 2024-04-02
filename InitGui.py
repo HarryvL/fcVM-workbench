@@ -368,7 +368,6 @@ class fcVMWorkbench(Workbench):
             self.csr_option = "CSR"
         if fcVM_window.averagedChk.isChecked():
             self.averaged_opion = "averaged"
-            print("checked")
         else:
             self.averaged_option = "unaveraged"
 

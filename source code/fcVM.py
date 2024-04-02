@@ -1528,7 +1528,6 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
 
         if fcVM.averagedChk.isChecked():
             # averaged results over all connecting nodes
-            print("averaged checked")
             nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
                                  numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
             npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
@@ -1541,7 +1540,6 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
                 tet10svm[nd - 1] += npsvm10[index]
         else:
             # maximum results corner nodes
-            print("averaged unchecked")
             nppeeq10 = np.dot(map_inter, nppeeq4)  # nodal point peeq
             npcsr10 = np.dot(map_inter, npcsr4)  # nodal point csr
             npsvm10 = np.dot(map_inter, npsvm4)  # nodal point von Mises stress
