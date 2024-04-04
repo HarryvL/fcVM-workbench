@@ -62,6 +62,8 @@ if settings["solver"] == 1:
     from sksparse.cholmod import cholesky
 elif settings["solver"] == 2:
     from cholespy import CholeskySolverD, MatrixType
+elif settings["solver"] == 3:
+    from sksparse_minimal import SparseCholesky
 
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
@@ -792,13 +794,18 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         factor = cholesky(gsm)
     elif settings["solver"] == 2:
         solver = CholeskySolverD(gsm.shape[0], gsm.indptr, gsm.indices, gsm.data, MatrixType.CSC)
+    elif settings["solver"] == 3:
+        sparse_cholesky = SparseCholesky(gsm)
+
     t1 = time.perf_counter()
+    f = fixdof * glv + modf
     if settings["solver"] == 1:
-        ue = factor(fixdof * glv + modf)  # elastic solution
+        ue = factor(f)  # elastic solution
     elif settings["solver"] == 2:
         ue = np.empty(gsm.shape[0])
-        f = fixdof * glv + modf
         solver.solve(f, ue)
+    elif settings["solver"] == 3:
+        ue = sparse_cholesky.solve_A(f)
 
     t2 = time.perf_counter()
     prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
@@ -911,13 +918,16 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 iterat += 1
                 iterat_tot += 1
 
+                f = relax * r
                 t0 = time.perf_counter()
                 if settings["solver"] == 1:
-                    due = factor(relax * r)
+                    due = factor(f)
                 elif settings["solver"] == 2:
                     due = np.empty(gsm.shape[0])
-                    f = relax * r
                     solver.solve(f, due)
+                elif settings["solver"] == 3:
+                    due = sparse_cholesky.solve_A(f)
+
                 t1 = time.perf_counter()
 
                 factor_time_tot += t1 - t0
