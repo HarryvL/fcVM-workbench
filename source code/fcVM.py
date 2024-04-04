@@ -40,7 +40,6 @@ import matplotlib.pyplot as plt
 from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
-from sksparse.cholmod import cholesky
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 from matplotlib.widgets import Button, TextBox
@@ -48,6 +47,22 @@ from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
 
 mdir = os.path.dirname(dummy.file_path())
+
+settings = {}
+try:
+    with open(os.path.join(mdir, 'fcVM.ini'), "r") as f:
+        key = str(f.readline().strip()).split(" #")[0]
+        settings[key] = int(f.readline().strip())
+except FileNotFoundError:
+    print("File fcVM.ini not found")
+
+print("settings: ", settings)
+
+if settings["solver"] == 1:
+    from sksparse.cholmod import cholesky
+elif settings["solver"] == 2:
+    from cholespy import CholeskySolverD, MatrixType
+
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
@@ -773,9 +788,18 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
     # Cholesky decomposition of the global stiffness matrix and elastic solution using Cholmod
     t0 = time.perf_counter()
-    factor = cholesky(gsm)
+    if settings["solver"] == 1:
+        factor = cholesky(gsm)
+    elif settings["solver"] == 2:
+        solver = CholeskySolverD(gsm.shape[0], gsm.indptr, gsm.indices, gsm.data, MatrixType.CSC)
     t1 = time.perf_counter()
-    ue = factor(fixdof * glv + modf)  # elastic solution
+    if settings["solver"] == 1:
+        ue = factor(fixdof * glv + modf)  # elastic solution
+    elif settings["solver"] == 2:
+        ue = np.empty(gsm.shape[0])
+        f = fixdof * glv + modf
+        solver.solve(f, ue)
+
     t2 = time.perf_counter()
     prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
 
@@ -888,8 +912,14 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 iterat_tot += 1
 
                 t0 = time.perf_counter()
-                due = factor(relax * r)
+                if settings["solver"] == 1:
+                    due = factor(relax * r)
+                elif settings["solver"] == 2:
+                    due = np.empty(gsm.shape[0])
+                    f = relax * r
+                    solver.solve(f, due)
                 t1 = time.perf_counter()
+
                 factor_time_tot += t1 - t0
 
                 # Riks control correction to load level increment
