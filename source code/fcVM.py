@@ -56,7 +56,7 @@ try:
 except FileNotFoundError:
     print("File fcVM.ini not found")
 
-print("settings: ", settings)
+#print("settings: ", settings)
 
 if settings["solver"] == 1:
     from sksparse.cholmod import cholesky
@@ -1707,3 +1707,88 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, t
     doc.recompute()
 
     return resVol
+
+
+def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
+    gp10, gp6, gp2 = gaussPoints()
+
+    coor = mesh.Nodes
+    # xle = np.zeros((3, 3), dtype=float)  # coordinates of load line nodes
+    # xlf = np.zeros((3, 6), dtype=float)  # coordinates of load face nodes
+
+    edge_length = []
+    edge_peeq = []
+    edge_CSR = []
+    edge_svm = []
+
+    for index, edge in enumerate(Edge_Elements):
+        edge_length.append(0.0)
+        edge_peeq.append(0.0)
+        edge_CSR.append(0.0)
+        edge_svm.append(0.0)
+        for element in edge:
+            xle = []
+            for node in element:
+                xle.append([coor[node].x, coor[node].y, coor[node].z])
+            # integrate variable
+            xle = np.array(xle).T
+            for gp in gp2:
+                xi = gp[0]
+                xsj, shp = shape2lin(xi, xle)
+                for i in range(3):
+                    nd = element[i]-1
+                    dl = shp[i] * abs(xsj) * gp[1]
+                    edge_length[index] += dl
+                    edge_peeq[index] += peeq[nd] * dl
+                    edge_CSR[index] += CSR[nd] * dl
+                    edge_svm[index] += svm[nd] * dl
+        Length = edge_length[index]
+        if Length > 0.0:
+            edge_peeq[index] /= Length
+            edge_CSR[index] /= Length
+            edge_svm[index] /= Length
+
+        # print("edge_length: ", edge_length)
+        # print("average peeq: ", peeq_sum / edge_length)
+        # print("average CSR: ", CSR_sum / edge_length)
+        # print("average svm: ", svm_sum / edge_length)
+
+    face_area = []
+    face_peeq = []
+    face_CSR = []
+    face_svm = []
+
+    for index, face in enumerate(Face_Elements):
+        face_area.append(0.0)
+        face_peeq.append(0.0)
+        face_CSR.append(0.0)
+        face_svm.append(0.0)
+        for element in face:
+            xlf = []
+            for node in element:
+                xlf.append([coor[node].x, coor[node].y, coor[node].z])
+            # integrate variable
+            xlf = np.array(xlf).T
+            for gp in gp6:
+                xi = gp[0]
+                et = gp[1]
+                xsj, shp, bmatS, xx, xt, xp = shape6tri(xi, et, xlf)
+                for i in range(6):
+                    nd = element[i]-1
+                    dA = shp[i] * abs(xsj) * gp[2]
+                    face_area[index] += dA
+                    face_peeq[index] += peeq[nd] * dA
+                    face_CSR[index] += CSR[nd] * dA
+                    face_svm[index] += svm[nd] * dA
+        Area = face_area[index]
+        if Area> 0.0:
+            face_peeq[index] /= Area
+            face_CSR[index] /= Area
+            face_svm[index] /= Area
+
+        # print("face_area: ", face_area)
+        # print("average peeq: ", peeq_sum / face_area)
+        # print("average CSR: ", CSR_sum / face_area)
+        # print("average svm: ", svm_sum / face_area)
+
+    return edge_length, edge_peeq, edge_CSR, edge_svm, face_area, face_peeq, face_CSR, face_svm

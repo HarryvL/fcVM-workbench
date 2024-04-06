@@ -50,13 +50,13 @@
       <property name="minimumSize">
        <size>
         <width>88</width>
-        <height>0</height>
+        <height>107</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
         <width>524287</width>
-        <height>524287</height>
+        <height>1019</height>
        </size>
       </property>
       <property name="windowTitle">
@@ -752,31 +752,68 @@
                   <string>Actions</string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_3">
-                  <item row="0" column="3">
-                   <widget class="QPushButton" name="quitBtn">
-                    <property name="text">
-                     <string>Quit</string>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="0" column="2">
                    <widget class="QPushButton" name="startBtn">
+                    <property name="maximumSize">
+                     <size>
+                      <width>65</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
                     <property name="text">
                      <string>Start</string>
                     </property>
                    </widget>
                   </item>
+                  <item row="0" column="1">
+                   <widget class="QPushButton" name="saveBtn">
+                    <property name="maximumSize">
+                     <size>
+                      <width>65</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>Save</string>
+                    </property>
+                   </widget>
+                  </item>
                   <item row="0" column="0">
                    <widget class="QPushButton" name="resetBtn">
+                    <property name="maximumSize">
+                     <size>
+                      <width>65</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
                     <property name="text">
                      <string>Reset</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="1">
-                   <widget class="QPushButton" name="saveBtn">
+                  <item row="0" column="4">
+                   <widget class="QPushButton" name="quitBtn">
+                    <property name="maximumSize">
+                     <size>
+                      <width>65</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
                     <property name="text">
-                     <string>Save</string>
+                     <string>Quit</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="3">
+                   <widget class="QPushButton" name="sumBtn">
+                    <property name="maximumSize">
+                     <size>
+                      <width>65</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>Average</string>
                     </property>
                    </widget>
                   </item>

@@ -1,0 +1,183 @@
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2024 - Harry van Langen <hvlanalysis@gmail.com>        *
+# *                                                                         *
+# *   This program is free software; you can redistribute it and/or modify  *
+# *   it under the terms of the GNU Lesser General Public License (LGPL)    *
+# *   as published by the Free Software Foundation; either version 2 of     *
+# *   the License, or (at your option) any later version.                   *
+# *   for detail see the LICENCE text file.                                 *
+# *                                                                         *
+# *   This program is distributed in the hope that it will be useful,       *
+# *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+# *   GNU Library General Public License for more details.                  *
+# *                                                                         *
+# *   You should have received a copy of the GNU Library General Public     *
+# *   License along with this program; if not, write to the Free Software   *
+# *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  *
+# *   USA                                                                   *
+# *                                                                         *
+# ***************************************************************************
+
+import os
+import sys
+import dummy
+import numpy as np
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide2 import QtWidgets, QtGui, QtCore
+
+mdir = os.path.dirname(dummy.file_path())
+name = App.ActiveDocument.Label
+file_path = os.path.join(mdir, "control files", name + '.inp')
+macro_path = os.path.join(mdir, 'source code')
+
+if 'fcVM' in sys.modules.keys():
+    del (sys.modules['fcVM'])
+else:
+    sys.path.append(macro_path)
+
+import fcVM as ft
+
+rv = FCmw.findChild(QtWidgets.QTextEdit, "Report view")
+rv.clear()
+
+FCmw = Gui.getMainWindow()
+doc = App.ActiveDocument
+shape_edges = {}
+shape_faces = {}
+
+Edge_Elements = []
+Edge_Names = []
+Face_Elements = []
+Face_Names = []
+
+
+def main(ft, mesh, s, mdir, name):
+    Edge_Elements = []
+    Edge_Names = []
+    Face_Elements = []
+    Face_Names = []
+
+    for index, subobj in enumerate(s.SubObjects):
+        key = s.Object.FullName.split("#")[1] + "(" + s.Object.Label + ")" + "." + s.SubElementNames[index]
+        el = []
+        if (subobj.ShapeType == "Edge"):
+            Edge_Names.append(key)
+            edge_elements = mesh.getEdgesByEdge(subobj)
+            for edge_element in edge_elements:
+                el.append(list(mesh.getElementNodes(edge_element)))
+            Edge_Elements.append(el)
+        elif (subobj.ShapeType == "Face"):
+            Face_Names.append(key)
+            face_elements = mesh.getFacesByFace(subobj)
+            for face_element in face_elements:
+                el.append(list(mesh.getElementNodes(face_element)))
+            Face_Elements.append(el)
+
+    doc = App.activeDocument()
+    rm = doc.getObject('ResultMechanical')
+
+    nn = len(mesh.Nodes)
+
+    try:
+        CSR = rm.CriticalStrainRatio
+    except:
+        CSR = []
+
+    try:
+        peeq = rm.Peeq
+    except:
+        peeq = []
+
+    try:
+        svm = rm.vonMises
+    except:
+        svm = []
+
+    if CSR == []: CSR = nn * [0.0]
+    if peeq == []: peeq = nn * [0.0]
+    if svm == []: svm = nn * [0.0]
+
+    edge_length, edge_peeq, edge_CSR, edge_svm, face_area, face_peeq, face_CSR, face_svm = ft.calcSum(Edge_Elements,
+                                                                                                      Face_Elements,
+                                                                                                      mesh,
+                                                                                                      CSR,
+                                                                                                      peeq,
+                                                                                                      svm)
+
+
+    file_path = os.path.join(mdir, "output files", name + '.avr')
+
+    with open(file_path, "w") as f:
+        f.write("model name:{0: >30}\n\n".format(name))
+        f.write("average values")
+        print("average values")
+        f.write(
+            "\n=========================================================================================================================\n\n")
+
+        f.write(
+            "{0: >10}{1: >10}{2: >10}{3: >10}    {4}\n".format("Length", "peeq", "CSR", "svmises", "edge"))
+        if len(Edge_Names)>0:
+            print(
+                "{0: >10}{1: >10}{2: >10}{3: >10}    {4}".format("Length", "peeq", "CSR", "svmises", "edge"))
+
+        for index, edge in enumerate(Edge_Names):
+            f.write(
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}    {4}\n'.format(
+                    edge_length[index], edge_peeq[index], edge_CSR[index], edge_svm[index], edge))
+            print(
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}    {4}'.format(
+                    edge_length[index], edge_peeq[index], edge_CSR[index], edge_svm[index], edge))
+
+            # print("{} average values".format(edge))
+            # print(
+            #     "{0: >10}{1: >10}{2: >10}{3: >10}".format("Length", "peeq", "CSR", "svmises"))
+            # print(
+            #     '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}'.format(
+            #         edge_length[index], edge_peeq[index], edge_CSR[index], edge_svm[index]))
+
+        f.write(
+            "\n=========================================================================================================================\n\n")
+
+        f.write(
+            "{0: >10}{1: >10}{2: >10}{3: >10}    {4}\n".format("Area", "peeq", "CSR", "svmises", "face"))
+        if len(Face_Names)>0:
+            print(
+                "{0: >10}{1: >10}{2: >10}{3: >10}    {4}".format("Area", "peeq", "CSR", "svmises", "face"))
+
+        for index, face in enumerate(Face_Names):
+            f.write(
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}    {4}\n'.format(
+                    face_area[index], face_peeq[index], face_CSR[index], face_svm[index], face))
+            print(
+                '{0: >10.2e}{1: >10.2e}{2: >10.2e}{3: >10.2e}    {4}'.format(
+                    face_area[index], face_peeq[index], face_CSR[index], face_svm[index], face))
+
+        f.write(
+            "\n=========================================================================================================================\n\n")
+
+    f.close()
+
+    # fcVM_window.progressBar.setValue(0)
+    # fcVM_window.Step.setText("0")
+    # fcVM_window.Load_Factor.setText("0.000")
+
+
+go = False
+
+try:
+    mesh = doc.getObject("FEMMeshGmsh").FemMesh
+    try:
+        s = Gui.Selection.getSelectionEx()[0]
+        if s.SubObjects == (): raise IndexError
+        go = True
+    except IndexError:
+        print("First select edges and/or faces")
+        go = False
+except:
+    print("First generate a mesh")
+    go = False
+
+if go: main(ft, mesh, s, mdir, name)

@@ -88,6 +88,8 @@ class fcVMWorkbench(Workbench):
 
         self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
 
+        self.sum_file_path = os.path.join(dir_name, "source code", "fcVM_sum.FCMacro")
+
         self.disp_option = "incremental"
 
         self.csr_option = "PEEQ"
@@ -122,6 +124,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.quitBtn.clicked.connect(self.Deactivated)
         fcVM_window.resetBtn.clicked.connect(self.reset_clicked)
         fcVM_window.saveBtn.clicked.connect(self.save_clicked)
+        fcVM_window.sumBtn.clicked.connect(self.sum_clicked)
         fcVM_window.totalRbtn.toggled.connect(self.btn_state)
         fcVM_window.incrRbtn.toggled.connect(self.btn_state)
         fcVM_window.peeqRbtn.toggled.connect(self.btn_state)
@@ -193,6 +196,8 @@ class fcVMWorkbench(Workbench):
         except Exception:
             None
 
+        FreeCADGui.Selection.clearSelection()
+
         fcVM_macro = open(self.macro_file_path).read()
         exec(fcVM_macro)
 
@@ -234,6 +239,12 @@ class fcVMWorkbench(Workbench):
             f.write(fcVM_window.target_LF.text() + "\n")
             f.write(self.csr_option + "\n")
             f.write(self.averaged_opion + "\n")
+
+    def sum_clicked(self):
+        fcVM_sum = open(self.sum_file_path).read()
+        exec(fcVM_sum)
+
+        return
 
     def open_file(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
