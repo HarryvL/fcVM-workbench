@@ -30,12 +30,14 @@ import FreeCADGui
 import ObjectsFem
 import numpy as np
 import Part as Part
+import pyvista as pv
 import FreeCAD as App
 import FreeCADGui as Gui
 from FreeCAD import Units
 import scipy.sparse as scsp
 from numba import jit, types
 from numba.typed import Dict
+from pyvista import CellType
 import matplotlib.pyplot as plt
 from femtools import membertools
 from femmesh import meshsetsgetter
@@ -56,7 +58,7 @@ try:
 except FileNotFoundError:
     print("File fcVM.ini not found")
 
-#print("settings: ", settings)
+# print("settings: ", settings)
 
 if settings["solver"] == 1:
     from sksparse.cholmod import cholesky
@@ -301,6 +303,7 @@ def setUpInput(doc, mesh, analysis):
 
 
 # shape functions for a 4-node tetrahedron - only used for stress interpolation
+@jit(nopython=True, cache=True)
 def shape4tet(xi, et, ze, xl):
     shp = np.zeros((4), dtype=np.float64)
 
@@ -769,7 +772,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
              glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
-             ultimate_strain, fcVM_window, Et_E, target_LF, x):
+             ultimate_strain, fcVM_window, Et_E, target_LF, x, noce):
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
 
@@ -1078,8 +1081,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             else:
                 ul_limit = 0
 
-        cnt, dl, du, target_LF = plot(fcVM_window, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du, target_LF,
-                                      nstep, ue, ultimate_strain)
+        averaged = fcVM_window.averagedChk.isChecked()
+        cnt, dl, du, target_LF = plot(fcVM_window, averaged, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du,
+                                      target_LF,
+                                      nstep, ue, ultimate_strain, disp_new, disp_old, elNodes, nocoord, sig_new, peeq,
+                                      sigmises, csr, noce, sig_yield_inp)
 
         # print("target_LF: ", target_LF)
         # print("dl: ", dl)
@@ -1102,8 +1108,25 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
 
 # plot the load-deflection curve
-def plot(fcVM, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, target_LF, nstep, ue, ultimate_strain):
+def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, target_LF, nstep, ue, ultimate_strain,
+         disp_new, disp_old, elNodes, nocoord, sig_new, peeq, sigmises, csr, noce, sig_yield):
     class Index(object):
+
+        def __init__(self, averaged, disp_new,
+                     disp_old, elNodes, nocoord, sig_new, peeq,
+                     sigmises, csr, noce, sig_yield):
+            self.averaged = averaged
+            self.elNodes = elNodes
+            self.nocoord = nocoord
+            self.sig_new = sig_new
+            self.peeq = peeq
+            self.sigmises = sigmises
+            self.csr = csr
+            self.noce = noce
+            self.disp_old = disp_old
+            self.disp_new = disp_new
+            self.sig_yield = sig_yield
+
         def stop(self, event):
             self.cnt = False
             plt.close()
@@ -1137,8 +1160,96 @@ def plot(fcVM, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, target_LF,
         def submit(self, LF):
             self.target_LF_out = float(LF)
 
+        def VTK(self, event):
+
+            # pv.global_theme.cmap = 'jet'
+            pv.global_theme.cmap = 'coolwarm'
+            # pv.global_theme.cmap = 'turbo'
+            # pv.set_plot_theme('dark')
+            pv.global_theme.full_screen = True
+            pv.global_theme.title = 'VTK'
+
+            # Controlling the text properties
+            sargs = dict(
+                title_font_size=16,
+                label_font_size=14,
+                shadow=False,
+                n_labels=5,
+                italic=True,
+                fmt="%.2e",
+                font_family="arial",
+            )
+
+            # Remove from plotters so output is not produced in docs
+            pv.plotting.plotter._ALL_PLOTTERS.clear()
+
+            tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = mapStresses(self.averaged, self.elNodes,
+                                                                                 self.nocoord,
+                                                                                 self.sig_new, self.peeq,
+                                                                                 self.sigmises, self.csr, self.noce,
+                                                                                 self.sig_yield)
+
+            x_range = max(nocoord[:, 0]) - min(nocoord[:, 0])
+            y_range = max(nocoord[:, 1]) - min(nocoord[:, 1])
+            z_range = max(nocoord[:, 2]) - min(nocoord[:, 2])
+
+            geo_range = max(x_range, y_range, z_range)
+
+            disp_range = max(self.disp_new) - min(self.disp_new)
+
+            if disp_range == 0.0:
+                scale = 1.0
+            else:
+                scale = 0.2 * geo_range / disp_range
+
+            padding = np.full(len(self.elNodes), 10, dtype=int)
+            self.elements = np.vstack((padding, (self.elNodes - 1).T)).T
+
+            celltypes = np.full(len(self.elNodes), fill_value=CellType.QUADRATIC_TETRA, dtype=np.uint8)
+
+            points = self.nocoord + scale * np.reshape(disp_new, (len(nocoord), 3))
+            grid1 = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid1.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
+            grid2 = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid2.point_data["Equivalent Plastic Strain\n"] = tet10peeq.flatten(order="F")
+            grid3 = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid3.point_data["von Mises Stress\n"] = tet10svm.flatten(order="F")
+            grid4 = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid4.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
+
+            grid = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
+            grid.point_data["Equivalent Plastic Strain\n"] = tet10peeq.flatten(order="F")
+            grid.point_data["von Mises Stress\n"] = tet10svm.flatten(order="F")
+            grid.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
+
+            # p = pv.Plotter(shapewindow_size=[1000, 1000])
+            p = pv.Plotter(shape=(2, 2))
+            p.set_background('grey', all_renderers=True)
+
+            # left upper pane
+            p.add_mesh(grid1, show_edges=False, scalar_bar_args=sargs)
+
+            # right upper pane
+            p.subplot(0, 1)
+            p.add_mesh(grid2, show_edges=False, scalar_bar_args=sargs)
+
+            # left lower pane
+            p.subplot(1, 0)
+            p.add_mesh(grid3, show_edges=False, scalar_bar_args=sargs)
+
+            # right lower pane
+            p.subplot(1, 1)
+            p.add_mesh(grid4, show_edges=False, scalar_bar_args=sargs)
+
+            pv.save_meshio("VTK_test.vtk", grid)
+
+            p.show()
+
     print(len(un), len(lbd))
-    callback = Index()
+    callback = Index(averaged, disp_new,
+                     disp_old, elNodes, nocoord, sig_new, peeq,
+                     sigmises, csr, noce, sig_yield)
     callback.cnt = False
     callback.clicked = False
     callback.dl = dl
@@ -1171,11 +1282,14 @@ def plot(fcVM, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, target_LF,
     axstop = plt.axes([0.5 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
     axadd = plt.axes([0.5 - b_w / 2.0, b_y, b_w, b_h])
     axbox = plt.axes([0.5 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    axVTK = plt.axes([0.825, b_y, b_w, b_h])
     # axbox = plt.axes([0.53, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
     badd.on_clicked(callback.add)
+    bVTK = Button(axVTK, 'VTK')
+    bVTK.on_clicked(callback.VTK)
     # brev = Button(axrev, 'rev')
     # brev.on_clicked(callback.rev)
     text_box = TextBox(axbox, "", textalignment="center")
@@ -1509,8 +1623,10 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
 
 # map stresses to nodes
-def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
+@jit(nopython=True, cache=True)
+def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yield):
     # map maps corner node stresses to all tet10 nodes
+
     map_inter = np.array([[1.0, 0.0, 0.0, 0.0],
                           [0.0, 1.0, 0.0, 0.0],
                           [0.0, 0.0, 1.0, 0.0],
@@ -1524,22 +1640,34 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
 
     expm = np.zeros((4, 4), dtype=np.float64)  # extrapolation matrix from Gauss points to corner nodes
     ipstress = np.zeros((4, 6), dtype=np.float64)  # Tet10 stresses by Gauss point (4 GP and 6 components)
-    ippeeq = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
-    ipcsr = np.zeros((4, 1), dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
-    ipsvm = np.zeros((4, 1), dtype=np.float64)  # Tet10 von Mises stress by Gauss point (4 GP and 1 component)
+    ippeeq = np.zeros(4, dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
+    ipcsr = np.zeros(4, dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
+    ipsvm = np.zeros(4, dtype=np.float64)  # Tet10 von Mises stress by Gauss point (4 GP and 1 component)
 
     ip10, ip6, ip2 = gaussPoints()
 
     tet10stress = np.zeros((len(nocoord), 6), dtype=np.float64)
-    tet10peeq = np.zeros((len(nocoord)), dtype=np.float64)
-    tet10csr = np.zeros((len(nocoord)), dtype=np.float64)
-    tet10svm = np.zeros((len(nocoord)), dtype=np.float64)
+    tet10peeq = np.zeros(len(nocoord), dtype=np.float64)
+    tet10csr = np.zeros(len(nocoord), dtype=np.float64)
+    tet10svm = np.zeros(len(nocoord), dtype=np.float64)
+    tet10triax = np.zeros(len(nocoord), dtype=np.float64)
+    zero10 = np.zeros(len(nocoord), dtype=np.float64)
+    nppeeq10 = np.zeros(10, dtype=np.float64)
+    npcsr10 = np.zeros(10, dtype=np.float64)
+    npsvm10 = np.zeros(10, dtype=np.float64)
+
+    xl = np.zeros((10, 3), dtype=np.float64)
 
     # map stresses in volumes to nodal points
     for el, nodes in enumerate(elNodes):
         elpos = 24 * el
         elposeq = 4 * el
-        xl = np.array([nocoord[nd - 1] for nd in nodes]).T
+        # xl = np.array([nocoord[nd - 1] for nd in nodes]).T
+        for i in range(3):
+            for j in range(10):
+                nd = nodes[j]
+                xl[j][i] = nocoord[nd - 1][i]
+
         for index, ip in enumerate(ip10):
             xi = ip[0]
             et = ip[1]
@@ -1566,14 +1694,17 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
         for index, nd in enumerate(nodes):
             tet10stress[nd - 1] += npstress10[index]
 
-        if fcVM.averagedChk.isChecked():
+        if averaged:
             # averaged results over all connecting nodes
-            nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
-                                 numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
-            npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
-                                numnodes).T  # nodal point csr all nodes divided by number of connecting elements
-            npsvm10 = np.divide(np.dot(map_inter, npsvm4).T,
-                                numnodes).T  # nodal point csr all nodes divided by number of connecting elements
+            nppeeq10 = np.dot(map_inter, nppeeq4) / numnodes
+            npcsr10 = np.dot(map_inter, npcsr4) / numnodes
+            npsvm10 = np.dot(map_inter, npsvm4) / numnodes
+            # nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
+            #                      numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
+            # npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
+            #                     numnodes).T  # nodal point csr all nodes divided by number of connecting elements
+            # npsvm10 = np.divide(np.dot(map_inter, npsvm4).T,
+            #                     numnodes).T  # nodal point csr all nodes divided by number of connecting elements
             for index, nd in enumerate(nodes):
                 tet10peeq[nd - 1] += nppeeq10[index]
                 tet10csr[nd - 1] += npcsr10[index]
@@ -1589,6 +1720,13 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
                 tet10csr[nd - 1] = max(tet10csr[nd - 1], npcsr10[index])
                 tet10svm[nd - 1] = max(tet10svm[nd - 1], npsvm10[index])
 
+    tet10peeq = np.fmax(tet10peeq, zero10)
+    tet10csr = np.fmax(tet10csr, zero10)
+    tet10svm = np.fmax(tet10svm, zero10)
+
+    for i in range(len(nocoord)):
+        tet10triax[i] = (tet10stress[i][0] + tet10stress[i][1] + tet10stress[i][2]) / 3.0 / sig_yield
+
     # results intermediate nodes
     for el, nodes in enumerate(elNodes):
         nd_corner = nodes[0:4]
@@ -1596,8 +1734,9 @@ def mapStresses(fcVM, elNodes, nocoord, sig, peeq, sigvm, csr, noce):
         tet10peeq[nd_inter - 1] = np.dot(map_inter[4:10], tet10peeq[nd_corner - 1])
         tet10csr[nd_inter - 1] = np.dot(map_inter[4:10], tet10csr[nd_corner - 1])
         tet10svm[nd_inter - 1] = np.dot(map_inter[4:10], tet10svm[nd_corner - 1])
+        tet10triax[nd_inter - 1] = np.dot(map_inter[4:10], tet10triax[nd_corner - 1])
 
-    return tet10stress, tet10peeq, tet10csr, tet10svm
+    return tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax
 
 
 # fill resultobject with results
@@ -1713,8 +1852,6 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
     gp10, gp6, gp2 = gaussPoints()
 
     coor = mesh.Nodes
-    # xle = np.zeros((3, 3), dtype=float)  # coordinates of load line nodes
-    # xlf = np.zeros((3, 6), dtype=float)  # coordinates of load face nodes
 
     edge_length = []
     edge_peeq = []
@@ -1736,7 +1873,7 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
                 xi = gp[0]
                 xsj, shp = shape2lin(xi, xle)
                 for i in range(3):
-                    nd = element[i]-1
+                    nd = element[i] - 1
                     dl = shp[i] * abs(xsj) * gp[1]
                     edge_length[index] += dl
                     edge_peeq[index] += peeq[nd] * dl
@@ -1747,11 +1884,6 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
             edge_peeq[index] /= Length
             edge_CSR[index] /= Length
             edge_svm[index] /= Length
-
-        # print("edge_length: ", edge_length)
-        # print("average peeq: ", peeq_sum / edge_length)
-        # print("average CSR: ", CSR_sum / edge_length)
-        # print("average svm: ", svm_sum / edge_length)
 
     face_area = []
     face_peeq = []
@@ -1774,21 +1906,88 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
                 et = gp[1]
                 xsj, shp, bmatS, xx, xt, xp = shape6tri(xi, et, xlf)
                 for i in range(6):
-                    nd = element[i]-1
+                    nd = element[i] - 1
                     dA = shp[i] * abs(xsj) * gp[2]
                     face_area[index] += dA
                     face_peeq[index] += peeq[nd] * dA
                     face_CSR[index] += CSR[nd] * dA
                     face_svm[index] += svm[nd] * dA
         Area = face_area[index]
-        if Area> 0.0:
+        if Area > 0.0:
             face_peeq[index] /= Area
             face_CSR[index] /= Area
             face_svm[index] /= Area
 
-        # print("face_area: ", face_area)
-        # print("average peeq: ", peeq_sum / face_area)
-        # print("average CSR: ", CSR_sum / face_area)
-        # print("average svm: ", svm_sum / face_area)
-
     return edge_length, edge_peeq, edge_CSR, edge_svm, face_area, face_peeq, face_CSR, face_svm
+
+
+def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, file):
+    padding = np.full(len(elNodes), 10, dtype=int)
+    cells = np.vstack((padding, (elNodes - 1).T)).T
+
+    celltypes = np.full(len(elNodes), fill_value=CellType.QUADRATIC_TETRA, dtype=np.uint8)
+
+    grid = pv.UnstructuredGrid(cells, celltypes, nocoord)
+    grid.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
+    grid.point_data["Equivalent Plastic Strain\n"] = tet10peeq.flatten(order="F")
+    grid.point_data["von Mises Stress\n"] = tet10svm.flatten(order="F")
+    grid.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
+
+    displacement = dis.reshape((len(nocoord), 3))
+
+    grid.point_data['Displacement'] = displacement
+
+    tet10s1, tet10s2, tet10s3, sv1, sv2, sv3 = calculate_principal_stress(tet10stress)
+
+    grid.point_data["Major Principal Stress\n"] = tet10s1.flatten(order="F")
+    grid.point_data["Intermediate Principal Stress\n"] = tet10s2.flatten(order="F")
+    grid.point_data["Minor Principal Stress\n"] = tet10s3.flatten(order="F")
+    grid.point_data['Major Principal Stress Vector'] = sv1
+    grid.point_data['Intermediate Principal Stress Vector'] = sv2
+    grid.point_data['Minor Principal Stress Vector'] = sv3
+
+    pv.save_meshio(file, grid)
+
+
+@jit(nopython=True, cache=True, nogil=True)
+def calculate_principal_stress(tet10stress):
+    s1 = np.zeros((len(tet10stress), 3), dtype=np.float64)
+    s2 = np.zeros((len(tet10stress), 3), dtype=np.float64)
+    s3 = np.zeros((len(tet10stress), 3), dtype=np.float64)
+    tet10s1 = np.zeros(len(tet10stress), dtype=np.float64)
+    tet10s2 = np.zeros(len(tet10stress), dtype=np.float64)
+    tet10s3 = np.zeros(len(tet10stress), dtype=np.float64)
+
+    for index, stress in enumerate(tet10stress):
+        s11 = stress[0]  # Sxx
+        s22 = stress[1]  # Syy
+        s33 = stress[2]  # Szz
+        s12 = stress[3]  # Sxy
+        s31 = stress[4]  # Szx
+        s23 = stress[5]  # Syz
+        sigma = np.array([
+            [s11, s12, s31],
+            [s12, s22, s23],
+            [s31, s23, s33]
+        ])
+
+        # print(sigma)
+
+        eigenvalues, eigenvectors = np.linalg.eig(sigma)
+
+        eigenvalues = eigenvalues.real
+        eigenvectors = eigenvectors.real
+
+        idx = eigenvalues.argsort()[::-1]
+        eigenvalues = eigenvalues[idx]
+        eigenvectors = eigenvectors[:, idx]
+
+        tet10s1[index] = eigenvalues[0]
+        tet10s2[index] = eigenvalues[1]
+        tet10s3[index] = eigenvalues[2]
+
+        s1[index] = eigenvalues[0] * eigenvectors[:, 0]
+        s2[index] = eigenvalues[1] * eigenvectors[:, 1]
+        s3[index] = eigenvalues[2] * eigenvectors[:, 2]
+
+    return tet10s1, tet10s2, tet10s3, s1, s2, s3

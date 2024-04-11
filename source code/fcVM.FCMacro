@@ -127,7 +127,7 @@ displacements, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, s
     elNodes, noCoord, fixdof, movdof, modf, elMat,
     stm, row, col, globalLoadVector, nstep, iterat_max,
     error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-    ultimate_strain, fcVM_window, Et_E, target_LF, x)
+    ultimate_strain, fcVM_window, Et_E, target_LF, x, noce)
 
 t1 = time.time()
 t[3] = t1 - t0
@@ -137,7 +137,8 @@ if not fail:
     # map stresses to nodal points
     prn_upd("map stresses and strains to nodal points\n")
     t0 = time.time()
-    tet10stress, tet10peeq, tet10csr, tet10svm = ft.mapStresses(fcVM_window, elNodes, noCoord, stresses, peeq, sigmises, csr, noce)
+    averaged = fcVM_window.averagedChk.isChecked()
+    tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses, peeq, sigmises, csr, noce, sig_yield)
     t1 = time.time()
     t[4] = t1 - t0
 
@@ -150,6 +151,11 @@ if not fail:
     t1 = time.time()
     t[5] = t1 - t0
     prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
+
+    # paste results in the FEM result object
+    VTKfile = os.path.join(mdir, "output files", name + '.vtk')
+    ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, VTKfile)
+
 
 timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
          f"prepare finite element input................................... {t[1]:7.3f} seconds",

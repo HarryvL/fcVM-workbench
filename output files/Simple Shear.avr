@@ -1,16 +1,14 @@
 model name:                  Simple Shear
 
+average values
 =========================================================================================================================
 
-Box(Cube).Edge5 average values
-    Length      peeq       CSR   svmises
-  1.00e+01  9.08e-03  5.51e-02  2.40e+03
-Box(Cube).Edge6 average values
-    Length      peeq       CSR   svmises
-  1.00e+01  9.08e-03  5.51e-02  2.40e+03
+    Length      peeq       CSR   svmises    edge
 
 =========================================================================================================================
 
-Box(Cube).Face3 average values
-      Area      peeq       CSR   svmises
-  1.00e+02  9.08e-02  5.51e-01  2.40e+04
+      Area      peeq       CSR   svmises    face
+  1.00e+02  1.30e-02  7.87e-02  2.40e+02    Box(Cube).Face3
+
+=========================================================================================================================
+
