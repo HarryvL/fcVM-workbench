@@ -58,7 +58,7 @@ App.getUserAppDataDir()
 <img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
 
 ### Dependencies
-fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib and scikit-sparse. On Linux and Mac-OS systems these can be installed with the usual package managers. On Windows this requires more effort:
+fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib, scikit-sparse, pyvista and meshio. On Linux and Mac-OS systems these can be installed with the usual package managers (e.g. conda or mamba). On Windows this requires more effort:
 1. download Miniforge3: [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe)
 1. run the installer: Miniforge3-Windows-x86_64.exe
 1. find and run Miniforge on your system - this opens a Miniforge Prompt: (base) C:\"path">
