@@ -64,7 +64,7 @@ fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib, sci
 1. find and run Miniforge on your system - this opens a Miniforge Prompt: (base) C:\"path">
 1. create a new virtual environment: (base) C:\"path"> mamba create --name fcVM (or any other name of your choice)
 1. change into the new environment: (base) C:\"path"> mamba activate fcVM (or the other name you chose)
-1. instal freeCAD and dependencies: (fcVM) C:\"path"> mamba install freecad scipy numba matplotlib scikit-sparse (with spaces and no commas)
+1. instal freeCAD and dependencies: (fcVM) C:\"path"> mamba install freecad scipy numba matplotlib scikit-sparse pyvista meshio (with spaces and no commas)
 1. check with python if the dependencies can be imported: (fcVM) C:\"path"> python
 1. \>>> import scipy.sparse
 1. \>>> import sksparse.cholmod
