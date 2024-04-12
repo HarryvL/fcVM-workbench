@@ -43,7 +43,6 @@ from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
 from femresult import resulttools as rt
-from pyvistaqt import BackgroundPlotter
 from feminout import importToolsFem as itf
 from matplotlib.widgets import Button, TextBox
 from matplotlib.ticker import FormatStrFormatter
