@@ -43,11 +43,13 @@ from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
 from femresult import resulttools as rt
+from pyvistaqt import BackgroundPlotter
 from feminout import importToolsFem as itf
 from matplotlib.widgets import Button, TextBox
 from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
 
+global mdir
 mdir = os.path.dirname(dummy.file_path())
 
 settings = {}
@@ -67,6 +69,7 @@ elif settings["solver"] == 2:
 elif settings["solver"] == 3:
     from sksparse_minimal import SparseCholesky
 
+global name
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
@@ -83,18 +86,27 @@ def prn_upd(*args):
 def setUpAnalysis():
     doc = App.ActiveDocument
     mesh = doc.getObject("FEMMeshGmsh").FemMesh
+    return_code = 0
     if mesh is None:
-        prn_upd("No Gmsh object. Please create one first")
-        raise SystemExit()
+        # prn_upd("No Gmsh object. Please create one first")
+        return_code = 1
+        # raise SystemExit()
+    if mesh.Nodes == {}:
+        # prn_upd("No mesh. Please generate mesh first")
+        return_code = 2
+        # raise SystemExit()
+
     analysis = doc.getObject("Analysis")
     if analysis is None:
-        prn_upd("No Analysis object. Please create one first")
-        raise SystemExit()
+        # prn_upd("No Analysis object. Please create one first")
+        return_code = 3
+        # raise SystemExit()
+
     # purge result objects
     rt.purge_results(analysis)
     doc.recompute()
 
-    return doc, mesh, analysis
+    return doc, mesh, analysis, return_code
 
 
 def setUpInput(doc, mesh, analysis):
@@ -1162,6 +1174,10 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
         def VTK(self, event):
 
+            def key_press(p):
+                file = os.path.join(mdir, "output files", name + '.png')
+                p.screenshot(file)
+
             # pv.global_theme.cmap = 'jet'
             pv.global_theme.cmap = 'coolwarm'
             # pv.global_theme.cmap = 'turbo'
@@ -1224,7 +1240,10 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             grid.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
 
             # p = pv.Plotter(shapewindow_size=[1000, 1000])
+
             p = pv.Plotter(shape=(2, 2))
+            # p = BackgroundPlotter(shape=(2, 2))
+
             p.set_background('grey', all_renderers=True)
 
             # left upper pane
@@ -1242,8 +1261,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             p.subplot(1, 1)
             p.add_mesh(grid4, show_edges=False, scalar_bar_args=sargs)
 
-            pv.save_meshio("VTK_test.vtk", grid)
-
+            p.add_key_event("s", lambda: key_press(p))
             p.show()
 
     print(len(un), len(lbd))
@@ -1741,11 +1759,8 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
 
 # fill resultobject with results
 def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm):
+    return_code = 0
     analysis = doc.getObject("Analysis")
-
-    if analysis is None:
-        prn_upd("No Analysis object. Please create one first")
-        raise SystemExit()
 
     nn = len(nocoord)  # number of nodes
 

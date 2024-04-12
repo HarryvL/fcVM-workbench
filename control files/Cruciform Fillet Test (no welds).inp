@@ -2,7 +2,7 @@
 0.0
 0.0
 0
-50
+10
 20
 1.0e-3
 1.2
@@ -13,5 +13,5 @@ incremental
 0.25
 0.0
 3
-PEEQ
-unaveraged
+CSR
+averaged
