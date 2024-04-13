@@ -58,13 +58,13 @@ App.getUserAppDataDir()
 <img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
 
 ### Dependencies
-fcVM imports (from) the following packages: numpy, scipy, numba, matplotlib, scikit-sparse, pyvista and meshio. On Linux and Mac-OS systems these can be installed with the usual package managers (e.g. conda or mamba). On Windows this requires more effort:
+fcVM imports (from) the following packages: numpy, scipy (version 1.11.3), numba, matplotlib, scikit-sparse, pyvista and meshio. On Linux and Mac-OS systems these can be installed with the usual package managers (e.g. conda or mamba). On Windows this requires more effort:
 1. download Miniforge3: [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe)
 1. run the installer: Miniforge3-Windows-x86_64.exe
 1. find and run Miniforge on your system - this opens a Miniforge Prompt: (base) C:\"path">
 1. create a new virtual environment: (base) C:\"path"> mamba create --name fcVM (or any other name of your choice)
 1. change into the new environment: (base) C:\"path"> mamba activate fcVM (or the other name you chose)
-1. instal freeCAD and dependencies: (fcVM) C:\"path"> mamba install freecad scipy numba matplotlib scikit-sparse pyvista meshio (with spaces and no commas)
+1. instal freeCAD and dependencies: (fcVM) C:\"path"> mamba install freecad scipy=1.11.3 numba matplotlib scikit-sparse pyvista meshio (with spaces and no commas)
 1. check with python if the dependencies can be imported: (fcVM) C:\"path"> python
 1. \>>> import scipy.sparse
 1. \>>> import sksparse.cholmod
