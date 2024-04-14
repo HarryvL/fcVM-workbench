@@ -40,6 +40,7 @@ fcVM_window.Load_Factor.setText("0.000")
 fcVM_window.PEEQ.setText("0.000")
 fcVM_window.CSR.setText("0.000")
 
+
 def prn_upd(*args):
     for obj in args:
         print(str(obj), end='')
@@ -58,7 +59,7 @@ else:
 
 import fcVM as ft
 
-t = 6 * [0.0]
+t = 7 * [0.0]
 
 try:
     with open(file_path, encoding='utf8') as f:
@@ -112,7 +113,8 @@ if return_code == 0:
     # calculate the global stiffness matrix and global load vector
     prn_upd("calculate the GSM and GLV\n")
     t0 = time.time()
-    stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(elNodes, noCoord, elMat,
+    stm, row, col, globalLoadVector, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x = ft.calcGSM(elNodes, noCoord,
+                                                                                                   elMat,
                                                                                                    fix, grav_x, grav_y,
                                                                                                    grav_z,
                                                                                                    loadFaces, pressure,
@@ -146,7 +148,8 @@ if return_code == 0:
         prn_upd("map stresses and strains to nodal points\n")
         t0 = time.time()
         averaged = fcVM_window.averagedChk.isChecked()
-        tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses, peeq, sigmises, csr, noce, sig_yield)
+        tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses,
+                                                                                peeq, sigmises, csr, noce, sig_yield)
         t1 = time.time()
         t[4] = t1 - t0
 
@@ -161,16 +164,21 @@ if return_code == 0:
         prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
 
         # paste results in the FEM result object
+        prn_upd("export results to VTK\n")
+        t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
         ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, VTKfile)
-
+        t1 = time.time()
+        t[6] = t1 - t0
+        prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
 
     timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
              f"prepare finite element input................................... {t[1]:7.3f} seconds",
              f"calculate the global stiffness matrix and global load vector... {t[2]:7.3f} seconds",
              f"solve the global siffness matrix equation...................... {t[3]:7.3f} seconds",
              f"map stresses to nodal points................................... {t[4]:7.3f} seconds",
-             f"paste results in the FEM result object......................... {t[5]:7.3f} seconds"]
+             f"paste results in the FEM result object......................... {t[5]:7.3f} seconds",
+             f"export results to VTK.......................................... {t[6]:7.3f} seconds"]
 
     prn_upd("------------------------------ SUMMARY ------------------------------")
     for entry in timer:
@@ -197,7 +205,8 @@ if return_code == 0:
         for i in range(len(crip)):
             f.write(
                 '{0: 11d}{1: >10.2e}{2: >10.2e}{3: >10.2e}{4: >10.2e}{5: >10.2e}{6: >10.2e}{7: >10.2e}{8: >10.2e}{9: >10.2e}{10: >10.2e}{11: >10.2e}\n'.format(
-                    crip[i], x[crip[i]][0], x[crip[i]][1], x[crip[i]][2], lout[i], un[i], peeqplot[i], pplot[i], svmplot[i],
+                    crip[i], x[crip[i]][0], x[crip[i]][1], x[crip[i]][2], lout[i], un[i], peeqplot[i], pplot[i],
+                    svmplot[i],
                     triaxplot[i], ecrplot[i], csrplot[i]))
 
         f.write(

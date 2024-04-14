@@ -84,13 +84,16 @@ def prn_upd(*args):
 
 def setUpAnalysis():
     doc = App.ActiveDocument
-    mesh = doc.getObject("FEMMeshGmsh").FemMesh
+    try:
+        mesh = doc.getObject("FEMMeshGmsh").FemMesh
+    except:
+        mesh = None
     return_code = 0
     if mesh is None:
         # prn_upd("No Gmsh object. Please create one first")
         return_code = 1
         # raise SystemExit()
-    if mesh.Nodes == {}:
+    elif mesh.Nodes == {}:
         # prn_upd("No mesh. Please generate mesh first")
         return_code = 2
         # raise SystemExit()
@@ -797,6 +800,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
     prn_upd("construct sparse global stiffness matrix: {:.2e} s".format((t1 - t0)))
+
+    # gsm_dense = gsm.todense()
+    #
+    # for i in range(len(gsm_dense)):
+    #     print(i, gsm_dense[i,i])
 
     # TODO: improve error estimate for pure displacement control
     qnorm = np.linalg.norm(glv)
@@ -1638,108 +1646,48 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
     return sig_update
 
-
 # map stresses to nodes
 @jit(nopython=True, cache=True)
 def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yield):
     # map maps corner node stresses to all tet10 nodes
 
-    map_inter = np.array([[1.0, 0.0, 0.0, 0.0],
-                          [0.0, 1.0, 0.0, 0.0],
-                          [0.0, 0.0, 1.0, 0.0],
-                          [0.0, 0.0, 0.0, 1.0],
-                          [0.5, 0.5, 0.0, 0.0],
+    map_inter = np.array([[0.5, 0.5, 0.0, 0.0],
                           [0.0, 0.5, 0.5, 0.0],
                           [0.5, 0.0, 0.5, 0.0],
                           [0.5, 0.0, 0.0, 0.5],
                           [0.0, 0.5, 0.0, 0.5],
                           [0.0, 0.0, 0.5, 0.5]])
 
-    expm = np.zeros((4, 4), dtype=np.float64)  # extrapolation matrix from Gauss points to corner nodes
-    ipstress = np.zeros((4, 6), dtype=np.float64)  # Tet10 stresses by Gauss point (4 GP and 6 components)
-    ippeeq = np.zeros(4, dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
-    ipcsr = np.zeros(4, dtype=np.float64)  # Tet10 peeq by Gauss point (4 GP and 1 component)
-    ipsvm = np.zeros(4, dtype=np.float64)  # Tet10 von Mises stress by Gauss point (4 GP and 1 component)
-
-    ip10, ip6, ip2 = gaussPoints()
-
     tet10stress = np.zeros((len(nocoord), 6), dtype=np.float64)
     tet10peeq = np.zeros(len(nocoord), dtype=np.float64)
     tet10csr = np.zeros(len(nocoord), dtype=np.float64)
     tet10svm = np.zeros(len(nocoord), dtype=np.float64)
     tet10triax = np.zeros(len(nocoord), dtype=np.float64)
-    zero10 = np.zeros(len(nocoord), dtype=np.float64)
-    nppeeq10 = np.zeros(10, dtype=np.float64)
-    npcsr10 = np.zeros(10, dtype=np.float64)
-    npsvm10 = np.zeros(10, dtype=np.float64)
 
-    xl = np.zeros((10, 3), dtype=np.float64)
+    tet4stress = sig.reshape((len(elNodes), 4, 6))
+    tet4peeq = peeq.reshape((len(elNodes), 4))
+    tet4csr = csr.reshape((len(elNodes), 4))
+    tet4svm = sigvm.reshape((len(elNodes), 4))
 
-    # map stresses in volumes to nodal points
+    # averaged nodal stresses
     for el, nodes in enumerate(elNodes):
-        elpos = 24 * el
-        elposeq = 4 * el
-        # xl = np.array([nocoord[nd - 1] for nd in nodes]).T
-        for i in range(3):
-            for j in range(10):
-                nd = nodes[j]
-                xl[j][i] = nocoord[nd - 1][i]
+        corners = nodes[0:4]
+        tet10stress[corners - 1] += tet4stress[el] / noce[corners - 1].reshape((4, 1))
 
-        for index, ip in enumerate(ip10):
-            xi = ip[0]
-            et = ip[1]
-            ze = ip[2]
-            shp = shape4tet(xi, et, ze, xl)
-            ippos = elpos + 6 * index
-            ipposeq = elposeq + index
-            ipstress[index] = sig[ippos:ippos + 6]  # ipstress (4x6): 6 stress components for 4 integration points
-            ippeeq[index] = peeq[ipposeq]  # ippeeq (4x1): 1 strain component for 4 integration points
-            ipcsr[index] = csr[ipposeq]  # ipcsr (4x1): 1 strain component for 4 integration points
-            ipsvm[index] = sigvm[ipposeq]  # ipsigvm (4x1): 1 von Mises stress component for 4 integration points
-            for i in range(4):
-                expm[index, i] = shp[i]
-        expm_inv = np.linalg.inv(expm)
-        npstress4 = np.dot(expm_inv, ipstress)  # npstress4 (4x6): for each corner node (4) all stress components (6)
-        nppeeq4 = np.dot(expm_inv, ippeeq)  # nppeeq (4x1): for each corner node (4) one strain component (1)
-        npcsr4 = np.dot(expm_inv, ipcsr)  # csr (4x1): for each corner node (4) one csr component (1)
-        npsvm4 = np.dot(expm_inv, ipsvm)  # csr (4x1): for each corner node (4) one csr component (1)
-
-        numnodes = np.array(
-            [noce[nodes[n] - 1] for n in range(10)])  # numnodes = number of elements connected to node "nodes[n]-1"
-        npstress10 = np.divide(np.dot(map_inter, npstress4).T,
-                               numnodes).T  # nodal point stress all nodes divided by number of connecting elements
-        for index, nd in enumerate(nodes):
-            tet10stress[nd - 1] += npstress10[index]
-
-        if averaged:
-            # averaged results over all connecting nodes
-            nppeeq10 = np.dot(map_inter, nppeeq4) / numnodes
-            npcsr10 = np.dot(map_inter, npcsr4) / numnodes
-            npsvm10 = np.dot(map_inter, npsvm4) / numnodes
-            # nppeeq10 = np.divide(np.dot(map_inter, nppeeq4).T,
-            #                      numnodes).T  # nodal point peeq all nodes divided by number of connecting elements
-            # npcsr10 = np.divide(np.dot(map_inter, npcsr4).T,
-            #                     numnodes).T  # nodal point csr all nodes divided by number of connecting elements
-            # npsvm10 = np.divide(np.dot(map_inter, npsvm4).T,
-            #                     numnodes).T  # nodal point csr all nodes divided by number of connecting elements
-            for index, nd in enumerate(nodes):
-                tet10peeq[nd - 1] += nppeeq10[index]
-                tet10csr[nd - 1] += npcsr10[index]
-                tet10svm[nd - 1] += npsvm10[index]
-        else:
-            # maximum results corner nodes
-            nppeeq10 = np.dot(map_inter, nppeeq4)  # nodal point peeq
-            npcsr10 = np.dot(map_inter, npcsr4)  # nodal point csr
-            npsvm10 = np.dot(map_inter, npsvm4)  # nodal point von Mises stress
-
-            for index, nd in enumerate(nodes[0:4]):
-                tet10peeq[nd - 1] = max(tet10peeq[nd - 1], nppeeq10[index])
-                tet10csr[nd - 1] = max(tet10csr[nd - 1], npcsr10[index])
-                tet10svm[nd - 1] = max(tet10svm[nd - 1], npsvm10[index])
-
-    tet10peeq = np.fmax(tet10peeq, zero10)
-    tet10csr = np.fmax(tet10csr, zero10)
-    tet10svm = np.fmax(tet10svm, zero10)
+    if averaged:
+        # averaged nodal scalars
+        for el, nodes in enumerate(elNodes):
+            corners = nodes[0:4]
+            tet10peeq[corners - 1] += tet4peeq[el] / noce[corners - 1]
+            tet10csr[corners - 1] += tet4csr[el] / noce[corners - 1]
+            tet10svm[corners - 1] += tet4svm[el] / noce[corners - 1]
+    else:
+        # unaveraged nodal scalars
+        for el, nodes in enumerate(elNodes):
+            corners = nodes[0:4]
+            tet10peeq[corners - 1] = np.fmax(tet10peeq[corners - 1], tet4peeq[el])
+            tet10csr[corners - 1] = np.fmax(tet10csr[corners - 1], tet4csr[el])
+            tet10svm[corners - 1] = np.fmax(tet10svm[corners - 1], tet4svm[el])
 
     for i in range(len(nocoord)):
         tet10triax[i] = (tet10stress[i][0] + tet10stress[i][1] + tet10stress[i][2]) / 3.0 / sig_yield
@@ -1748,10 +1696,11 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
     for el, nodes in enumerate(elNodes):
         nd_corner = nodes[0:4]
         nd_inter = nodes[4:10]
-        tet10peeq[nd_inter - 1] = np.dot(map_inter[4:10], tet10peeq[nd_corner - 1])
-        tet10csr[nd_inter - 1] = np.dot(map_inter[4:10], tet10csr[nd_corner - 1])
-        tet10svm[nd_inter - 1] = np.dot(map_inter[4:10], tet10svm[nd_corner - 1])
-        tet10triax[nd_inter - 1] = np.dot(map_inter[4:10], tet10triax[nd_corner - 1])
+        tet10stress[nd_inter - 1] = np.dot(map_inter, tet10stress[nd_corner - 1])
+        tet10peeq[nd_inter - 1] = np.dot(map_inter, tet10peeq[nd_corner - 1])
+        tet10csr[nd_inter - 1] = np.dot(map_inter, tet10csr[nd_corner - 1])
+        tet10svm[nd_inter - 1] = np.dot(map_inter, tet10svm[nd_corner - 1])
+        tet10triax[nd_inter - 1] = np.dot(map_inter, tet10triax[nd_corner - 1])
 
     return tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax
 
