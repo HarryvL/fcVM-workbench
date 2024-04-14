@@ -94,7 +94,7 @@ class fcVMWorkbench(Workbench):
 
         self.csr_option = "PEEQ"
 
-        self.averaged_opion = "unaveraged"
+        self.averaged_option = "unaveraged"
 
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
@@ -220,7 +220,6 @@ class fcVMWorkbench(Workbench):
 
     def save_clicked(self):
         inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
-
         with open(inp_file_path, "w") as f:
             f.write(fcVM_window.YSinput.text() + "\n")
             f.write(fcVM_window.GXinput.text() + "\n")
@@ -238,7 +237,7 @@ class fcVMWorkbench(Workbench):
             f.write(fcVM_window.Hinput.text() + "\n")
             f.write(fcVM_window.target_LF.text() + "\n")
             f.write(self.csr_option + "\n")
-            f.write(self.averaged_opion + "\n")
+            f.write(self.averaged_option + "\n")
 
     def sum_clicked(self):
         fcVM_sum = open(self.sum_file_path).read()
@@ -285,7 +284,8 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.csrRbtn.setChecked(True)
                 else:
                     fcVM_window.peeqRbtn.setChecked(True)
-                if str(f.readline().strip()) == "averaged":
+                avBtninp = str(f.readline().strip())
+                if avBtninp == "averaged":
                     fcVM_window.averagedChk.setChecked(True)
                 else:
                     fcVM_window.averagedChk.setChecked(False)
@@ -378,7 +378,7 @@ class fcVMWorkbench(Workbench):
         if fcVM_window.csrRbtn.isChecked():
             self.csr_option = "CSR"
         if fcVM_window.averagedChk.isChecked():
-            self.averaged_opion = "averaged"
+            self.averaged_option = "averaged"
         else:
             self.averaged_option = "unaveraged"
 
