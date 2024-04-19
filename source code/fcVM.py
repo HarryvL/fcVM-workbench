@@ -1179,9 +1179,203 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
         def submit(self, LF):
             self.target_LF_out = float(LF)
 
+        def PSV(self, event):
+
+            class Toggle_Plane():
+                def __init__(self, p):
+                    pass
+
+                def __call__(self, *args, **kwargs):
+                    p.plane_widgets[0].SetEnabled(not p.plane_widgets[0].GetEnabled())
+
+                def update(self):
+                    pass
+
+            class Scale_Stress():
+                def __init__(self, p, scale):
+                    self.scale = scale
+
+                def __call__(self, value):
+                    glyphs1 = grid1.glyph(orient="Major Principal Stress Vector", scale="Major Principal Stress",
+                                          factor=10 ** value * self.scale,
+                                          geom=geom)
+
+                    p.add_mesh(glyphs1, name='sv1', show_scalar_bar=False, lighting=False, cmap=['red'])
+
+                    glyphs2 = grid1.glyph(orient="Intermediate Principal Stress Vector",
+                                          scale="Intermediate Principal Stress",
+                                          factor=10 ** value * self.scale,
+                                          geom=geom)
+
+                    p.add_mesh(glyphs2, name='sv2', show_scalar_bar=False, lighting=False, cmap=['green'])
+
+                    glyphs3 = grid1.glyph(orient="Minor Principal Stress Vector", scale="Minor Principal Stress",
+                                          factor=10 ** value * self.scale,
+                                          geom=geom)
+
+                    p.add_mesh(glyphs3, name='sv3', show_scalar_bar=False, lighting=False, cmap=['blue'])
+
+                def update(self):
+                    pass
+
+            def screen_shot(p):
+                file = os.path.join(mdir, "output files", name + '_PSV.png')
+                p.screenshot(file)
+
+            # pv.global_theme.cmap = 'jet'
+            pv.global_theme.cmap = 'coolwarm'
+            # pv.global_theme.cmap = 'turbo'
+            # pv.set_plot_theme('dark')
+            pv.global_theme.full_screen = True
+            pv.global_theme.title = 'VTK'
+
+            # Controlling the text properties
+            sargs = dict(
+                title_font_size=16,
+                label_font_size=14,
+                shadow=False,
+                color="white",
+                bold=True,
+                n_labels=5,
+                italic=True,
+                fmt="%.2e",
+                font_family="arial",
+
+            )
+
+            tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = mapStresses(self.averaged, self.elNodes,
+                                                                                 self.nocoord,
+                                                                                 self.sig_new, self.peeq,
+                                                                                 self.sigmises, self.csr, self.noce,
+                                                                                 self.sig_yield)
+
+            tet10s1, tet10s2, tet10s3, sv1, sv2, sv3 = calculate_principal_stress(tet10stress)
+
+            x_range = max(nocoord[:, 0]) - min(nocoord[:, 0])
+            y_range = max(nocoord[:, 1]) - min(nocoord[:, 1])
+            z_range = max(nocoord[:, 2]) - min(nocoord[:, 2])
+
+            geo_range = max(x_range, y_range, z_range)
+
+            stress_range = max(max(map(abs, tet10s1)), max(map(abs, tet10s2)), max(map(abs, tet10s3)))
+
+            if stress_range == 0.0:
+                scale = 1.0
+            else:
+                scale = 0.2 * geo_range / stress_range
+
+            disp_range = max(self.disp_new) - min(self.disp_new)
+
+            if disp_range == 0.0:
+                scale_disp = 1.0
+            else:
+                scale_disp = 0.2 * geo_range / disp_range
+
+            padding = np.full(len(self.elNodes), 10, dtype=int)
+            self.elements = np.vstack((padding, (self.elNodes - 1).T)).T
+
+            celltypes = np.full(len(self.elNodes), fill_value=CellType.QUADRATIC_TETRA, dtype=np.uint8)
+            geom = pv.Line()
+
+            points = self.nocoord
+
+            grid = pv.UnstructuredGrid(self.elements, celltypes, points)
+            grid.point_data['Displacement'] = np.reshape(disp_new, (len(nocoord), 3))
+
+            grid1 = grid.warp_by_vector(vectors='Displacement', factor=scale_disp,
+                                        inplace=False, progress_bar=False)
+            grid1.point_data["Major Principal Stress"] = tet10s1.flatten(order="F")
+            grid1.point_data["Intermediate Principal Stress"] = tet10s2.flatten(order="F")
+            grid1.point_data["Minor Principal Stress"] = tet10s3.flatten(order="F")
+            grid1.point_data['Major Principal Stress Vector'] = sv1
+            grid1.point_data['Intermediate Principal Stress Vector'] = sv2
+            grid1.point_data['Minor Principal Stress Vector'] = sv3
+
+            glyphs1 = grid1.glyph(orient="Major Principal Stress Vector", scale="Major Principal Stress", factor=scale,
+                                  geom=geom)
+            glyphs2 = grid1.glyph(orient="Intermediate Principal Stress Vector", scale="Intermediate Principal Stress",
+                                  factor=scale, geom=geom)
+            glyphs3 = grid1.glyph(orient="Minor Principal Stress Vector", scale="Minor Principal Stress", factor=scale,
+                                  geom=geom)
+
+            p = pv.Plotter()
+
+            p.set_background('grey', all_renderers=True)
+
+            # p.set_background("royalblue", top="aliceblue")
+
+            p.add_mesh_clip_plane(grid1, name="mesh", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                  show_scalar_bar=False,
+                                  scalar_bar_args=sargs, cmap=['grey'])
+            p.add_mesh(glyphs1, name='sv1', show_scalar_bar=False, lighting=False, cmap=['red'])
+            p.add_mesh(glyphs2, name='sv2', show_scalar_bar=False, lighting=False, cmap=['green'])
+            p.add_mesh(glyphs3, name='sv3', show_scalar_bar=False, lighting=False, cmap=['blue'])
+
+            p.add_key_event("s", lambda: screen_shot(p))
+
+            ss = Scale_Stress(p, scale)
+            p.add_slider_widget(
+                callback=ss,
+                rng=[-1.0, 1.0],
+                value=0.0,
+                title="log(Scale Stress)",
+                pointa=(0.05, 0.075),
+                pointb=(0.3, 0.075),
+                style='modern',
+                slider_width=0.02,
+                tube_width=0.02
+            )
+
+            tp = Toggle_Plane(p)
+            p.add_key_event("t", lambda: tp())
+
+            p.show(cpos=[1.0, 1.0, 1.0])
+
         def VTK(self, event):
 
-            def key_press(p):
+            class Toggle_Plane():
+                def __init__(self, p):
+                    self.normals = []
+                    self.origins = []
+                    self.names = ["mesh1", "mesh2", "mesh3", "mesh4"]
+
+                def __call__(self, *args, **kwargs):
+                    if p.plane_widgets:
+                        self.normals = []
+                        self.origins = []
+                        for widget in p.plane_widgets:
+                            self.normals.append(widget.GetNormal())
+                            self.origins.append(widget.GetOrigin())
+                        p.clear_plane_widgets()
+
+                    else:
+                        for name in self.names:
+                            p.remove_actor(name)
+                        p.subplot(0, 0)
+                        p.add_mesh_clip_plane(grid1, name="mesh1", show_edges=False, normal=self.normals[0],
+                                              origin=self.origins[0],
+                                              invert=True, lighting=True,
+                                              scalar_bar_args=sargs)
+                        p.subplot(0, 1)
+                        p.add_mesh_clip_plane(grid2, name="mesh2", show_edges=False, normal=self.normals[1],
+                                              origin=self.origins[1],
+                                              invert=True, lighting=True,
+                                              scalar_bar_args=sargs)
+                        p.subplot(1, 0)
+                        p.add_mesh_clip_plane(grid3, name="mesh3", show_edges=False, normal=self.normals[2],
+                                              origin=self.origins[2],
+                                              invert=True, lighting=True,
+                                              scalar_bar_args=sargs)
+                        p.subplot(1, 1)
+                        p.add_mesh_clip_plane(grid4, name="mesh4", show_edges=False, normal=self.normals[3],
+                                              origin=self.origins[3],
+                                              invert=True, lighting=True,
+                                              scalar_bar_args=sargs)
+
+                def update(self):
+                    pass
+
+            def screen_shot(p):
                 file = os.path.join(mdir, "output files", name + '.png')
                 p.screenshot(file)
 
@@ -1197,14 +1391,14 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
                 title_font_size=16,
                 label_font_size=14,
                 shadow=False,
+                color="white",
+                bold=True,
                 n_labels=5,
                 italic=True,
                 fmt="%.2e",
                 font_family="arial",
-            )
 
-            # Remove from plotters so output is not produced in docs
-            pv.plotting.plotter._ALL_PLOTTERS.clear()
+            )
 
             tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = mapStresses(self.averaged, self.elNodes,
                                                                                  self.nocoord,
@@ -1240,36 +1434,38 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             grid4 = pv.UnstructuredGrid(self.elements, celltypes, points)
             grid4.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
 
-            grid = pv.UnstructuredGrid(self.elements, celltypes, points)
-            grid.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
-            grid.point_data["Equivalent Plastic Strain\n"] = tet10peeq.flatten(order="F")
-            grid.point_data["von Mises Stress\n"] = tet10svm.flatten(order="F")
-            grid.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
-
-            # p = pv.Plotter(shapewindow_size=[1000, 1000])
-
             p = pv.Plotter(shape=(2, 2))
-            # p = BackgroundPlotter(shape=(2, 2))
+
+            p.link_views()
 
             p.set_background('grey', all_renderers=True)
 
             # left upper pane
-            p.add_mesh(grid1, show_edges=False, scalar_bar_args=sargs)
+            p.subplot(0, 0)
+            p.add_mesh_clip_plane(grid1, name="mesh1", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                  scalar_bar_args=sargs)
 
             # right upper pane
             p.subplot(0, 1)
-            p.add_mesh(grid2, show_edges=False, scalar_bar_args=sargs)
+            p.add_mesh_clip_plane(grid2, name="mesh2", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                  scalar_bar_args=sargs)
 
             # left lower pane
             p.subplot(1, 0)
-            p.add_mesh(grid3, show_edges=False, scalar_bar_args=sargs)
+            p.add_mesh_clip_plane(grid3, name="mesh3", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                  scalar_bar_args=sargs)
 
             # right lower pane
             p.subplot(1, 1)
-            p.add_mesh(grid4, show_edges=False, scalar_bar_args=sargs)
+            p.add_mesh_clip_plane(grid4, name="mesh4", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                  scalar_bar_args=sargs)
 
-            p.add_key_event("s", lambda: key_press(p))
-            p.show()
+            p.add_key_event("s", lambda: screen_shot(p))
+
+            tp = Toggle_Plane(p)
+            p.add_key_event("t", lambda: tp())
+
+            p.show(cpos=[1.0, 1.0, 1.0])
 
     print(len(un), len(lbd))
     callback = Index(averaged, disp_new,
@@ -1304,23 +1500,26 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
     b_y = 0.05
     # axstop = plt.axes([0.5 - b_w - b_s, b_y, b_w, b_h])
     # axadd = plt.axes([0.5 + b_s, b_y, b_w, b_h])
-    axstop = plt.axes([0.5 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
-    axadd = plt.axes([0.5 - b_w / 2.0, b_y, b_w, b_h])
-    axbox = plt.axes([0.5 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
-    axVTK = plt.axes([0.825, b_y, b_w, b_h])
+    axstop = plt.axes([0.4 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
+    axadd = plt.axes([0.4 - b_w / 2.0, b_y, b_w, b_h])
+    axbox = plt.axes([0.4 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    axVTK = plt.axes([0.675, b_y, b_w, b_h])
+    axPSV = plt.axes([0.675 + b_w + b_s, b_y, b_w, b_h])
     # axbox = plt.axes([0.53, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
     badd.on_clicked(callback.add)
     bVTK = Button(axVTK, 'VTK')
+    bPSV = Button(axPSV, 'PSV')
     bVTK.on_clicked(callback.VTK)
+    bPSV.on_clicked(callback.PSV)
     # brev = Button(axrev, 'rev')
     # brev.on_clicked(callback.rev)
     text_box = TextBox(axbox, "", textalignment="center")
     text_box.set_val(target_LF)
     text_box.on_submit(callback.submit)
-    fig.text(0.5 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
+    fig.text(0.4 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
     fig.canvas.mpl_connect('close_event', callback.close_window)
 
     if ul_limit != 0:
@@ -1646,6 +1845,7 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
     return sig_update
 
+
 # map stresses to nodes
 @jit(nopython=True, cache=True)
 def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yield):
@@ -1884,7 +2084,7 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
     return edge_length, edge_peeq, edge_CSR, edge_svm, face_area, face_peeq, face_CSR, face_svm
 
 
-def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, file):
+def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, fy, file):
     padding = np.full(len(elNodes), 10, dtype=int)
     cells = np.vstack((padding, (elNodes - 1).T)).T
 
@@ -1898,9 +2098,15 @@ def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm,
 
     displacement = dis.reshape((len(nocoord), 3))
 
+    stress = tet10stress.reshape((len(nocoord), 6))
+
     grid.point_data['Displacement'] = displacement
 
+    grid.point_data['Stress Tensor'] = stress
+
     tet10s1, tet10s2, tet10s3, sv1, sv2, sv3 = calculate_principal_stress(tet10stress)
+
+    tet10rho = calculate_rho(tet10stress, fy)
 
     grid.point_data["Major Principal Stress\n"] = tet10s1.flatten(order="F")
     grid.point_data["Intermediate Principal Stress\n"] = tet10s2.flatten(order="F")
@@ -1908,6 +2114,10 @@ def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm,
     grid.point_data['Major Principal Stress Vector'] = sv1
     grid.point_data['Intermediate Principal Stress Vector'] = sv2
     grid.point_data['Minor Principal Stress Vector'] = sv3
+
+    grid.point_data['Reinforcement Ratio x'] = tet10rho[:, 0].flatten(order="F")
+    grid.point_data['Reinforcement Ratio y'] = tet10rho[:, 1].flatten(order="F")
+    grid.point_data['Reinforcement Ratio z'] = tet10rho[:, 2].flatten(order="F")
 
     pv.save_meshio(file, grid)
 
@@ -1954,3 +2164,178 @@ def calculate_principal_stress(tet10stress):
         s3[index] = eigenvalues[2] * eigenvectors[:, 2]
 
     return tet10s1, tet10s2, tet10s3, s1, s2, s3
+
+
+def calculate_rho(tet10stress, fy):
+    #
+    #   Calculation of Reinforcement Ratios and
+    #   Concrete Stresses according to http://heronjournal.nl/53-4/3.pdf
+    #           - See post:
+    #             https://forum.freecadweb.org/viewtopic.php?f=18&t=28821
+    #                   fy: factored yield strength of reinforcement bars
+    #
+
+    tet10rho = np.zeros((len(tet10stress), 3), dtype=np.float64)
+
+    for index, stress_tensor in enumerate(tet10stress):
+        rmin = 1.0e9
+        eqmin = 14
+
+        sxx = stress_tensor[0]
+        syy = stress_tensor[1]
+        szz = stress_tensor[2]
+        sxy = stress_tensor[3]
+        syz = stress_tensor[5]
+        sxz = stress_tensor[4]
+
+        rhox = np.zeros(15)
+        rhoy = np.zeros(15)
+        rhoz = np.zeros(15)
+
+        #    i1=sxx+syy+szz NOT USED
+        #    i2=sxx*syy+syy*szz+szz*sxx-sxy**2-sxz**2-syz**2 NOT USED
+        i3 = (sxx * syy * szz + 2 * sxy * sxz * syz - sxx * syz ** 2
+              - syy * sxz ** 2 - szz * sxy ** 2)
+
+        #    Solution (5)
+        d = (sxx * syy - sxy ** 2)
+        if d != 0.:
+            rhoz[0] = i3 / d / fy
+
+        #    Solution (6)
+        d = (sxx * szz - sxz ** 2)
+        if d != 0.:
+            rhoy[1] = i3 / d / fy
+
+        #    Solution (7)
+        d = (syy * szz - syz ** 2)
+        if d != 0.:
+            rhox[2] = i3 / d / fy
+
+        #    Solution (9)
+        if sxx != 0.:
+            fc = sxz * sxy / sxx - syz
+            fxy = sxy ** 2 / sxx
+            fxz = sxz ** 2 / sxx
+
+            #    Solution (9+)
+            rhoy[3] = syy - fxy + fc
+            rhoy[3] /= fy
+            rhoz[3] = szz - fxz + fc
+            rhoz[3] /= fy
+
+            #    Solution (9-)
+            rhoy[4] = syy - fxy - fc
+            rhoy[4] /= fy
+            rhoz[4] = szz - fxz - fc
+            rhoz[4] /= fy
+
+        #   Solution (10)
+        if syy != 0.:
+            fc = syz * sxy / syy - sxz
+            fxy = sxy ** 2 / syy
+            fyz = syz ** 2 / syy
+
+            # Solution (10+)
+            rhox[5] = sxx - fxy + fc
+            rhox[5] /= fy
+            rhoz[5] = szz - fyz + fc
+            rhoz[5] /= fy
+
+            # Solution (10-)vm
+            rhox[6] = sxx - fxy - fc
+
+            rhox[6] /= fy
+            rhoz[6] = szz - fyz - fc
+            rhoz[6] /= fy
+
+        # Solution (11)
+        if szz != 0.:
+            fc = sxz * syz / szz - sxy
+            fxz = sxz ** 2 / szz
+            fyz = syz ** 2 / szz
+
+            # Solution (11+)
+            rhox[7] = sxx - fxz + fc
+            rhox[7] /= fy
+            rhoy[7] = syy - fyz + fc
+            rhoy[7] /= fy
+
+            # Solution (11-)
+            rhox[8] = sxx - fxz - fc
+            rhox[8] /= fy
+            rhoy[8] = syy - fyz - fc
+            rhoy[8] /= fy
+
+        # Solution (13)
+        rhox[9] = (sxx + sxy + sxz) / fy
+        rhoy[9] = (syy + sxy + syz) / fy
+        rhoz[9] = (szz + sxz + syz) / fy
+
+        # Solution (14)
+        rhox[10] = (sxx + sxy - sxz) / fy
+        rhoy[10] = (syy + sxy - syz) / fy
+        rhoz[10] = (szz - sxz - syz) / fy
+
+        # Solution (15)
+        rhox[11] = (sxx - sxy - sxz) / fy
+        rhoy[11] = (syy - sxy + syz) / fy
+        rhoz[11] = (szz - sxz + syz) / fy
+
+        # Solution (16)
+        rhox[12] = (sxx - sxy + sxz) / fy
+        rhoy[12] = (syy - sxy - syz) / fy
+        rhoz[12] = (szz + sxz - syz) / fy
+
+        # Solution (17)
+        if syz != 0.:
+            rhox[13] = (sxx - sxy * sxz / syz) / fy
+        if sxz != 0.:
+            rhoy[13] = (syy - sxy * syz / sxz) / fy
+        if sxy != 0.:
+            rhoz[13] = (szz - sxz * syz / sxy) / fy
+
+        for ir in range(0, rhox.size):
+
+            if rhox[ir] >= -1.e-10 and rhoy[ir] >= -1.e-10 and rhoz[ir] > -1.e-10:
+
+                # Concrete Stresses
+                scxx = sxx - rhox[ir] * fy
+                scyy = syy - rhoy[ir] * fy
+                sczz = szz - rhoz[ir] * fy
+                ic1 = (scxx + scyy + sczz)
+                ic2 = (scxx * scyy + scyy * sczz + sczz * scxx - sxy ** 2
+                       - sxz ** 2 - syz ** 2)
+                ic3 = (scxx * scyy * sczz + 2 * sxy * sxz * syz - scxx * syz ** 2
+                       - scyy * sxz ** 2 - sczz * sxy ** 2)
+
+                if ic1 <= 1.e-6 and ic2 >= -1.e-6 and ic3 <= 1.0e-6:
+
+                    rsum = rhox[ir] + rhoy[ir] + rhoz[ir]
+
+                    if rsum < rmin and rsum > 0.:
+                        rmin = rsum
+                        eqmin = ir
+
+        tet10rho[index] = [rhox[eqmin], rhoy[eqmin], rhoz[eqmin]]
+
+    return tet10rho
+
+
+def calculate_mohr_coulomb(prin1, prin3, phi, fck):
+    #
+    #             Calculation of Mohr Coulomb yield criterion to judge
+    #             concrete curshing and shear failure
+    #                   phi: angle of internal friction
+    #                   fck: factored compressive strength of the matrix material (usually concrete)
+    #
+
+    coh = fck * (1 - np.sin(phi)) / 2 / np.cos(phi)
+
+    mc_stress = ((prin1 - prin3) + (prin1 + prin3) * np.sin(phi)
+                 - 2. * coh * np.cos(phi))
+
+    if mc_stress < 0.:
+        mc_stress = 0.
+
+    return mc_stress

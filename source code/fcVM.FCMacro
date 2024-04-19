@@ -23,6 +23,7 @@
 import os
 import sys
 import time
+import math
 import dummy
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -167,7 +168,7 @@ if return_code == 0:
         prn_upd("export results to VTK\n")
         t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, VTKfile)
+        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, sig_yield, VTKfile)
         t1 = time.time()
         t[6] = t1 - t0
         prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
