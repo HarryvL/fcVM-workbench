@@ -24,11 +24,13 @@ import os
 import sys
 import time
 import math
-import dummy
+import dummyVM
 import FreeCAD as App
 import FreeCADGui as Gui
 
-mdir = os.path.dirname(dummy.file_path())
+print("fcVM.FCMacro")
+
+mdir = os.path.dirname(dummyVM.file_path())
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
@@ -49,14 +51,12 @@ def prn_upd(*args):
     Gui.updateGui()
 
 
-prn_upd("fcVM.FCMacro started")
-
 if 'fcVM' in sys.modules.keys():
     del (sys.modules['fcVM'])
-    prn_upd("fcVM in sys.modules.keys")
+    print("fcVM in sys.modules.keys")
 else:
     sys.path.append(macro_path)
-    prn_upd("fcVM path added")
+    print("fcVM path added")
 
 import fcVM as ft
 
@@ -168,7 +168,8 @@ if return_code == 0:
         prn_upd("export results to VTK\n")
         t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, sig_yield, VTKfile)
+        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, sig_yield,
+                     VTKfile)
         t1 = time.time()
         t[6] = t1 - t0
         prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")

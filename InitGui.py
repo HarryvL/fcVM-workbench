@@ -33,7 +33,7 @@ __Communication__ = "https://forum.freecad.org/viewtopic.php?t=85474"
 
 import os
 import sys
-import dummy
+import dummyVM
 import FreeCAD
 import FreeCADGui
 from PySide2 import QtWidgets, QtGui, QtCore
@@ -41,7 +41,7 @@ from PySide2 import QtWidgets, QtGui, QtCore
 global FCmw
 FCmw = FreeCADGui.getMainWindow()
 global dir_name
-dir_name = os.path.dirname(dummy.file_path())
+dir_name = os.path.dirname(dummyVM.file_path())
 global double_validator
 double_validator = QtGui.QDoubleValidator()
 global int_validator
@@ -80,15 +80,19 @@ class fcVMWorkbench(Workbench):
         from PySide2 import QtCore
         global fcVM_window
 
+        import dummyVM
+        self.dir_name = os.path.dirname(dummyVM.file_path())
+
+
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
             self.doc = FreeCAD.newDocument("fcVM")
 
         self.file_name = self.doc.Label
 
-        self.macro_file_path = os.path.join(dir_name, "source code", "fcVM.FCMacro")
+        self.macro_file_path = os.path.join(self.dir_name, "source code", "fcVM.FCMacro")
 
-        self.sum_file_path = os.path.join(dir_name, "source code", "fcVM_sum.FCMacro")
+        self.sum_file_path = os.path.join(self.dir_name, "source code", "fcVM_sum.FCMacro")
 
         self.disp_option = "incremental"
 
@@ -116,7 +120,7 @@ class fcVMWorkbench(Workbench):
         self.obs = DocObserver(self)
         FreeCAD.addDocumentObserver(self.obs)
 
-        ui_Path = os.path.join(dir_name, "user_interface", "fcVM.ui")
+        ui_Path = os.path.join(self.dir_name, "user_interface", "fcVM.ui")
 
         fcVM_window = FreeCADGui.PySideUic.loadUi(ui_Path)
 
@@ -199,6 +203,7 @@ class fcVMWorkbench(Workbench):
         FreeCADGui.Selection.clearSelection()
 
         fcVM_macro = open(self.macro_file_path).read()
+        print(self.macro_file_path)
         exec(fcVM_macro)
 
     def quit_clicked(self):
@@ -219,7 +224,7 @@ class fcVMWorkbench(Workbench):
         fcVM_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
-        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
         with open(inp_file_path, "w") as f:
             f.write(fcVM_window.YSinput.text() + "\n")
             f.write(fcVM_window.GXinput.text() + "\n")
@@ -246,7 +251,7 @@ class fcVMWorkbench(Workbench):
         return
 
     def open_file(self):
-        inp_file_path = os.path.join(dir_name, "control files", self.file_name + '.inp')
+        inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
         try:
             with open(inp_file_path, "r") as f:
                 fcVM_window.YSinput.setText(str(f.readline().strip()))

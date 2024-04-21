@@ -23,7 +23,7 @@
 import os
 import time
 import math
-import dummy
+import dummyVM
 import FemGui
 import FreeCAD
 import FreeCADGui
@@ -49,7 +49,8 @@ from matplotlib.ticker import FormatStrFormatter
 from femtaskpanels import task_result_mechanical as trm
 
 global mdir
-mdir = os.path.dirname(dummy.file_path())
+mdir = os.path.dirname(dummyVM.file_path())
+print("fcVM.py")
 
 settings = {}
 try:
@@ -1181,6 +1182,16 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
         def PSV(self, event):
 
+            class Movie():
+                def __init__(self, p):
+                    pass
+
+                def __call__(self, *args, **kwargs):
+                    file = os.path.join(mdir, "output files", name + '_PSV.gif')
+                    path = p.generate_orbital_path(n_points=36)
+                    p.open_gif(file)
+                    p.orbit_on_path(path, write_frames=True)
+
             class Toggle_Plane():
                 def __init__(self, p):
                     pass
@@ -1219,6 +1230,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
                     pass
 
             def screen_shot(p):
+                print(mdir)
                 file = os.path.join(mdir, "output files", name + '_PSV.png')
                 p.screenshot(file)
 
@@ -1227,7 +1239,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             # pv.global_theme.cmap = 'turbo'
             # pv.set_plot_theme('dark')
             pv.global_theme.full_screen = True
-            pv.global_theme.title = 'VTK'
+            pv.global_theme.title = 'PSV'
 
             # Controlling the text properties
             sargs = dict(
@@ -1304,9 +1316,9 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
             # p.set_background("royalblue", top="aliceblue")
 
-            p.add_mesh_clip_plane(grid1, name="mesh", show_edges=False, normal=[1.0, 0., 0.], invert=True,
-                                  show_scalar_bar=False,
-                                  scalar_bar_args=sargs, cmap=['grey'])
+            clip = p.add_mesh_clip_plane(grid1, name="mesh", show_edges=False, normal=[1.0, 0., 0.], invert=True,
+                                         show_scalar_bar=False,
+                                         scalar_bar_args=sargs, cmap=['grey'])
             p.add_mesh(glyphs1, name='sv1', show_scalar_bar=False, lighting=False, cmap=['red'])
             p.add_mesh(glyphs2, name='sv2', show_scalar_bar=False, lighting=False, cmap=['green'])
             p.add_mesh(glyphs3, name='sv3', show_scalar_bar=False, lighting=False, cmap=['blue'])
@@ -1376,6 +1388,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
                     pass
 
             def screen_shot(p):
+                print(mdir)
                 file = os.path.join(mdir, "output files", name + '.png')
                 p.screenshot(file)
 

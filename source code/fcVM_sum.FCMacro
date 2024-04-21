@@ -22,13 +22,13 @@
 
 import os
 import sys
-import dummy
+import dummyVM
 import numpy as np
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide2 import QtWidgets, QtGui, QtCore
 
-mdir = os.path.dirname(dummy.file_path())
+mdir = os.path.dirname(dummyVM.file_path())
 name = App.ActiveDocument.Label
 file_path = os.path.join(mdir, "control files", name + '.inp')
 macro_path = os.path.join(mdir, 'source code')
