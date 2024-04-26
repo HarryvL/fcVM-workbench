@@ -1,17 +1,17 @@
-model name:                   Schelle_fem
-No. of elements:                    43114
-No. of Degrees of freedom:          79363
+model name:              Profile_stripped
+No. of elements:                   248438
+No. of Degrees of freedom:         488111
 
 =========================================================================================================================
 
 Sum of loads x-direction:        0.00e+00
-Sum of loads y-direction:        9.52e-12
-Sum of loads z-direction:       -1.83e+02
+Sum of loads y-direction:        1.00e+02
+Sum of loads z-direction:       -6.86e+01
 
 =========================================================================================================================
 
 Gauss point         x         y         z      load      disp      peeq  pressure   svmises     triax    eps_cr   csr_max
-          0  7.47e+01 -1.86e+02 -7.15e+01  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+          0  1.20e+01 -4.99e+02  2.45e+01  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
 
 =========================================================================================================================
 

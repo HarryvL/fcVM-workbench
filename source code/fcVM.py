@@ -905,7 +905,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         iRiks = True
         pstep = 0
         pr_u(0)
-        for _ in (range(nstep)):
+        while pstep < nstep:
             step += 1
             pstep += 1
             st_u(str(pstep))
@@ -1009,6 +1009,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 du = dl / (lbd[step + 1] - lbd[step]) * du
                 step -= 1
                 pstep -= 1
+
             else:
                 # update results at end of converged load step
                 pr_u(int(100 * (pstep + 1) / nstep))
@@ -1155,11 +1156,11 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
         def add(self, event):
             self.cnt = True
             self.clicked = True
-            print("self.LF: ", self.LF)
-            print("self.target_LF: ", self.target_LF)
-            print("self.target_LF_out: ", self.target_LF_out)
+            # print("self.LF: ", self.LF)
+            # print("self.target_LF: ", self.target_LF)
+            # print("self.target_LF_out: ", self.target_LF_out)
             cr1 = (self.target_LF - self.LF) * (self.target_LF_out - self.LF) <= 0.0
-            print(cr1)
+            # print(cr1)
             if (cr1):
                 self.dl = np.sign(self.target_LF_out - self.LF) * 1.0 / self.nstep
                 self.du = self.dl * self.ue
