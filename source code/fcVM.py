@@ -85,37 +85,40 @@ def prn_upd(*args):
 
 def setUpAnalysis():
     doc = App.ActiveDocument
-    try:
-        mesh = doc.getObject("FEMMeshGmsh").FemMesh
-    except:
-        mesh = None
-    return_code = 0
-    if mesh is None:
-        # prn_upd("No Gmsh object. Please create one first")
-        return_code = 1
-        # raise SystemExit()
-    elif mesh.Nodes == {}:
-        # prn_upd("No mesh. Please generate mesh first")
-        return_code = 2
-        # raise SystemExit()
 
-    analysis = doc.getObject("Analysis")
+    return_code = 0
+
+    mesh = None
+
+    for obj in doc.Objects:
+        if obj.Name[:7] == "FEMMesh":
+            mesh = doc.getObject(obj.Name)
+
+    if mesh is None:
+        return_code = 1
+    elif mesh.FemMesh.Nodes == {}:
+        return_code = 2
+
+    analysis = None
+
+    for obj in doc.Objects:
+        if obj.Name[:8] == "Analysis":
+            analysis = doc.getObject(obj.Name)
+
     if analysis is None:
-        # prn_upd("No Analysis object. Please create one first")
         return_code = 3
-        # raise SystemExit()
 
     # purge result objects
-    rt.purge_results(analysis)
+    if return_code == 0: rt.purge_results(analysis)
+
     doc.recompute()
 
     return doc, mesh, analysis, return_code
 
 
 def setUpInput(doc, mesh, analysis):
-    analysis = doc.getObject("Analysis")
+
     solver = doc.getObject("SolverCcxTools")
-    docmesh = doc.getObject("FEMMeshGmsh")
     member = membertools.AnalysisMember(analysis)
 
     if solver == None:
@@ -124,29 +127,29 @@ def setUpInput(doc, mesh, analysis):
         solver = doc.getObject("SolverCcxTools")
 
     # determine elements connected to a node using FC API
-    fet = mt.get_femelement_table(mesh)
+    fet = mt.get_femelement_table(mesh.FemMesh)
     # fet is dictionary: { elementid : [ nodeid, nodeid, ... , nodeid ] }
-    net = mt.get_femnodes_ele_table(mesh.Nodes, fet)
+    net = mt.get_femnodes_ele_table(mesh.FemMesh.Nodes, fet)
     # net is dictionary: {nodeID : [[eleID, binary node position], [], ...], nodeID : [[], [], ...], ...}
     # node0 has binary node position 2^0 = 1, node1 = 2^1 = 2, ..., node10 = 2^10 = 1024
 
     # create connectivity array elNodes for mapping local node number -> global node number
-    elNodes = np.array([mesh.getElementNodes(el) for el in mesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
+    elNodes = np.array([mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
 
     # create nodal coordinate array nocoord for node number -> (x,y,z)
-    ncv = list(mesh.Nodes.values())
+    ncv = list(mesh.FemMesh.Nodes.values())
     nocoord = np.asarray([[v.x, v.y, v.z] for v in ncv])  # nocoord[nodeIndex] = [x-coord, y-coord, z-coord]
 
     # get access to element sets: meshdatagetter.mat_geo_sets
     meshdatagetter = meshsetsgetter.MeshSetsGetter(
         analysis,
         solver,
-        docmesh,
+        mesh,
         member)
     meshdatagetter.get_mesh_sets()
 
     if len(member.mats_linear) == 1:
-        element_sets = [mesh.Volumes]
+        element_sets = [mesh.FemMesh.Volumes]
     else:
         element_sets = [es["FEMElements"] for es in member.mats_linear]
 
@@ -190,13 +193,13 @@ def setUpInput(doc, mesh, analysis):
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
-                        bc = mesh.getNodesByVertex(ref)
+                        bc = mesh.FemMesh.getNodesByVertex(ref)
                         for bcn in bc: bcnodes.append(bcn)
                     elif type(ref) == Part.Edge:
-                        bc = mesh.getNodesByEdge(ref)
+                        bc = mesh.FemMesh.getNodesByEdge(ref)
                         for bcn in bc: bcnodes.append(bcn)
                     elif type(ref) == Part.Face:
-                        bc = mesh.getNodesByFace(
+                        bc = mesh.FemMesh.getNodesByFace(
                             ref)  # all nodes on a primitive face with a displacement boundary condition
                         for bcn in bc:
                             bcnodes.append(bcn)
@@ -263,8 +266,8 @@ def setUpInput(doc, mesh, analysis):
                 for face in faces:
                     ref = part.Shape.getElement(face)
                     if type(ref) == Part.Face:
-                        for faceID in mesh.getFacesByFace(ref):  # face ID: ID of a 6-node face element
-                            face_nodes = list(mesh.getElementNodes(faceID))  # 6-node element node numbers
+                        for faceID in mesh.FemMesh.getFacesByFace(ref):  # face ID: ID of a 6-node face element
+                            face_nodes = list(mesh.FemMesh.getElementNodes(faceID))  # 6-node element node numbers
                             lf.append(face_nodes)
                             pr.append(sign * obj.Pressure)
                     else:
@@ -278,19 +281,19 @@ def setUpInput(doc, mesh, analysis):
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
                         dp = [F * d.x, F * d.y, F * d.z]
-                        lf_vertex.append(list(mesh.getNodesByVertex(ref)))
+                        lf_vertex.append(list(mesh.FemMesh.getNodesByVertex(ref)))
                         pr_vertex.append(dp)
                     elif type(ref) == Part.Edge:
                         L = ref.Length
                         dl = [F * d.x / L, F * d.y / L, F * d.z / L]
-                        for edgeID in mesh.getEdgesByEdge(ref):
-                            lf_edge.append(list(mesh.getElementNodes(edgeID)))
+                        for edgeID in mesh.FemMesh.getEdgesByEdge(ref):
+                            lf_edge.append(list(mesh.FemMesh.getElementNodes(edgeID)))
                             pr_edge.append(dl)
                     elif type(ref) == Part.Face:
                         A = ref.Area
                         dp = [F * d.x / A, F * d.y / A, F * d.z / A]
-                        for faceID in mesh.getFacesByFace(ref):
-                            lf_face.append(list(mesh.getElementNodes(faceID)))
+                        for faceID in mesh.FemMesh.getFacesByFace(ref):
+                            lf_face.append(list(mesh.FemMesh.getElementNodes(faceID)))
                             pr_face.append(dp)
                     else:
                         prn_upd("No Boundaries Found")
@@ -1922,7 +1925,11 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
 # fill resultobject with results
 def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm):
     return_code = 0
-    analysis = doc.getObject("Analysis")
+    for obj in doc.Objects:
+        if obj.Name[:8] == "Analysis":
+            analysis = doc.getObject(obj.Name)
+
+    # analysis = doc.getObject("Analysis")
 
     nn = len(nocoord)  # number of nodes
 
