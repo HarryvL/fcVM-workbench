@@ -117,7 +117,6 @@ def setUpAnalysis():
 
 
 def setUpInput(doc, mesh, analysis):
-
     solver = doc.getObject("SolverCcxTools")
     member = membertools.AnalysisMember(analysis)
 
@@ -134,7 +133,8 @@ def setUpInput(doc, mesh, analysis):
     # node0 has binary node position 2^0 = 1, node1 = 2^1 = 2, ..., node10 = 2^10 = 1024
 
     # create connectivity array elNodes for mapping local node number -> global node number
-    elNodes = np.array([mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
+    elNodes = np.array(
+        [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
 
     # create nodal coordinate array nocoord for node number -> (x,y,z)
     ncv = list(mesh.FemMesh.Nodes.values())
@@ -1885,6 +1885,7 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
     tet4peeq = peeq.reshape((len(elNodes), 4))
     tet4csr = csr.reshape((len(elNodes), 4))
     tet4svm = sigvm.reshape((len(elNodes), 4))
+    tet4triax = (tet4stress[:, :, 0] + tet4stress[:, :, 1] + tet4stress[:, :, 2]) / 3.0 / sig_yield
 
     # averaged nodal stresses
     for el, nodes in enumerate(elNodes):
@@ -1898,6 +1899,7 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
             tet10peeq[corners - 1] += tet4peeq[el] / noce[corners - 1]
             tet10csr[corners - 1] += tet4csr[el] / noce[corners - 1]
             tet10svm[corners - 1] += tet4svm[el] / noce[corners - 1]
+            tet10triax[corners - 1] += tet4triax[el] / noce[corners - 1]
     else:
         # unaveraged nodal scalars
         for el, nodes in enumerate(elNodes):
@@ -1905,9 +1907,10 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
             tet10peeq[corners - 1] = np.fmax(tet10peeq[corners - 1], tet4peeq[el])
             tet10csr[corners - 1] = np.fmax(tet10csr[corners - 1], tet4csr[el])
             tet10svm[corners - 1] = np.fmax(tet10svm[corners - 1], tet4svm[el])
+            tet10triax[corners - 1] = np.fmax(tet10triax[corners - 1], tet4triax[el])
 
-    for i in range(len(nocoord)):
-        tet10triax[i] = (tet10stress[i][0] + tet10stress[i][1] + tet10stress[i][2]) / 3.0 / sig_yield
+    # for i in range(len(nocoord)):
+    #     tet10triax[i] = (tet10stress[i][0] + tet10stress[i][1] + tet10stress[i][2]) / 3.0 / sig_yield
 
     # results intermediate nodes
     for el, nodes in enumerate(elNodes):
@@ -2167,7 +2170,7 @@ def calculate_principal_stress(tet10stress):
 
         # print(sigma)
 
-        eigenvalues, eigenvectors = np.linalg.eig(sigma)
+        eigenvalues, eigenvectors = np.linalg.eigh(sigma)
 
         eigenvalues = eigenvalues.real
         eigenvectors = eigenvectors.real
