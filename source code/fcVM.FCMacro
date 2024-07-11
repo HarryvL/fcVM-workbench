@@ -94,7 +94,7 @@ t[0] = t1 - t0
 prn_upd(f"extract information from FreeCAD objects - time taken:  {t1 - t0:7.3f}  seconds\n")
 
 if return_code == 1:
-    prn_upd("No Gmsh object. Please create one first")
+    prn_upd("No mesh object. Please create one first")
 elif return_code == 2:
     prn_upd("No mesh. Please generate mesh first")
 elif return_code == 3:
