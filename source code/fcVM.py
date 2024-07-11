@@ -277,20 +277,29 @@ def setUpInput(doc, mesh, analysis):
             F = obj.Force
             d = obj.DirectionVector
             for part, boundaries in obj.References:
+                N = 0
+                L = 0.0
+                A = 0.0
+                for boundary in boundaries:
+                    ref = part.Shape.getElement(boundary)
+                    if type(ref) == Part.Vertex: N+=1
+                    elif type(ref) == Part.Edge: L+=ref.Length
+                    else: A+=ref.Area
+                # print("N: ", N)
+                # print("L: ", L)
+                # print("A: ", A)
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
-                        dp = [F * d.x, F * d.y, F * d.z]
+                        dp = [F * d.x / N, F * d.y / N, F * d.z / N]
                         lf_vertex.append(list(mesh.FemMesh.getNodesByVertex(ref)))
                         pr_vertex.append(dp)
                     elif type(ref) == Part.Edge:
-                        L = ref.Length
                         dl = [F * d.x / L, F * d.y / L, F * d.z / L]
                         for edgeID in mesh.FemMesh.getEdgesByEdge(ref):
                             lf_edge.append(list(mesh.FemMesh.getElementNodes(edgeID)))
                             pr_edge.append(dl)
                     elif type(ref) == Part.Face:
-                        A = ref.Area
                         dp = [F * d.x / A, F * d.y / A, F * d.z / A]
                         for faceID in mesh.FemMesh.getFacesByFace(ref):
                             lf_face.append(list(mesh.FemMesh.getElementNodes(faceID)))
@@ -978,6 +987,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 r = fixdof * (lbd[step + 1] * glv - qin)
                 rnorm = np.linalg.norm(r)
                 error = rnorm / qnorm
+
                 prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
 
                 if iterat > iterat_max:
@@ -1002,6 +1012,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
                     rnorm = np.linalg.norm(r)
                     error = rnorm / qnorm
+
                     iterat = 0
 
             # if abs(lbd[step + 1]) > abs(target_LF) and iRiks:
