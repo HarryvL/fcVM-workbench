@@ -276,18 +276,21 @@ def setUpInput(doc, mesh, analysis):
         if obj.isDerivedFrom('Fem::ConstraintForce'):
             F = obj.Force
             d = obj.DirectionVector
+            N = 0
+            L = 0.0
+            A = 0.0
             for part, boundaries in obj.References:
-                N = 0
-                L = 0.0
-                A = 0.0
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
-                    if type(ref) == Part.Vertex: N+=1
-                    elif type(ref) == Part.Edge: L+=ref.Length
-                    else: A+=ref.Area
-                # print("N: ", N)
-                # print("L: ", L)
-                # print("A: ", A)
+                    if type(ref) == Part.Vertex:
+                        N += 1
+                    elif type(ref) == Part.Edge:
+                        L += ref.Length
+                    else:
+                        A += ref.Area
+            # print("A: ", A)
+
+            for part, boundaries in obj.References:
                 for boundary in boundaries:
                     ref = part.Shape.getElement(boundary)
                     if type(ref) == Part.Vertex:
