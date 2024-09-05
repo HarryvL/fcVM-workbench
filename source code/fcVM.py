@@ -132,10 +132,6 @@ def setUpInput(doc, mesh, analysis):
     # net is dictionary: {nodeID : [[eleID, binary node position], [], ...], nodeID : [[], [], ...], ...}
     # node0 has binary node position 2^0 = 1, node1 = 2^1 = 2, ..., node10 = 2^10 = 1024
 
-    # create connectivity array elNodes for mapping local node number -> global node number
-    elNodes = np.array(
-        [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
-
     # create nodal coordinate array nocoord for node number -> (x,y,z)
     ncv = list(mesh.FemMesh.Nodes.values())
     nocoord = np.asarray([[v.x, v.y, v.z] for v in ncv])  # nocoord[nodeIndex] = [x-coord, y-coord, z-coord]
@@ -152,6 +148,13 @@ def setUpInput(doc, mesh, analysis):
         element_sets = [mesh.FemMesh.Volumes]
     else:
         element_sets = [es["FEMElements"] for es in member.mats_linear]
+
+    # create connectivity array elNodes for mapping local node number -> global node number
+    # elNodes = np.array(
+    #     [mesh.FemMesh.getElementNodes(el) for el in mesh.FemMesh.Volumes])  # elNodes[elementIndex] = [node1,...,Node10]
+    elNodes = np.array(
+        [mesh.FemMesh.getElementNodes(el) for elset in element_sets for el in
+         elset])  # elNodes[elementIndex] = [node1,...,Node10]
 
     matCon = {}  # BooleanFragment Primitive the material object refers to
     ppEl = {}  # BooleanFragment Primitive element El belongs to
@@ -269,12 +272,18 @@ def setUpInput(doc, mesh, analysis):
                         for faceID in mesh.FemMesh.getFacesByFace(ref):  # face ID: ID of a 6-node face element
                             face_nodes = list(mesh.FemMesh.getElementNodes(faceID))  # 6-node element node numbers
                             lf.append(face_nodes)
-                            pr.append(sign * obj.Pressure)
+                            if int(App.Version()[0]) < 1 and int(App.Version()[1]) < 22:
+                                pr.append(sign * obj.Pressure)
+                            else:
+                                pr.append(sign * float(App.Units.Quantity(obj.Pressure.getValueAs('MPa'))))
                     else:
                         prn_upd("No Faces with Pressure Loads")
 
         if obj.isDerivedFrom('Fem::ConstraintForce'):
-            F = obj.Force
+            if int(App.Version()[0]) < 1 and int(App.Version()[1]) < 22:
+                F = obj.Force
+            else:
+                F = float(App.Units.Quantity(obj.Force.getValuesAs('N')))
             d = obj.DirectionVector
             N = 0
             L = 0.0
