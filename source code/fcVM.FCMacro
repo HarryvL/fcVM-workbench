@@ -81,6 +81,10 @@ try:
         target_LF = float(f.readline().strip())
         csr_option = f.readline().strip()
         averaged_option = f.readline().strip()
+        gnl = f.readline().strip()
+        maxImp = f.readline().strip()
+        ev1 = f.readline().strip()
+        ev2 = f.readline().strip()
 
 except:
     print("file not found")
@@ -134,11 +138,12 @@ if return_code == 0:
     Gui.updateGui()
     t0 = time.time()
 
-    displacements, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail = ft.calcDisp(
+    displacements, disp_el, eigenval, eigenvec, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail, nocoord_old = ft.calcDisp(
         elNodes, noCoord, fixdof, movdof, modf, elMat,
         stm, row, col, globalLoadVector, nstep, iterat_max,
         error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
-        ultimate_strain, fcVM_window, Et_E, target_LF, x, noce)
+        ultimate_strain, fcVM_window, Et_E, target_LF, x, noce, fix, grav_x, grav_y, grav_z, loadFaces, pressure,
+        loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, gnl, maxImp, ev1, ev2)
 
     t1 = time.time()
     t[3] = t1 - t0
@@ -148,7 +153,8 @@ if return_code == 0:
         # map stresses to nodal points
         prn_upd("map stresses and strains to nodal points\n")
         t0 = time.time()
-        averaged = fcVM_window.averagedChk.isChecked()
+        # averaged = fcVM_window.averagedChk.isChecked()
+        averaged = False
         tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax = ft.mapStresses(averaged, elNodes, noCoord, stresses,
                                                                                 peeq, sigmises, csr, noce, sig_yield)
         t1 = time.time()
@@ -159,7 +165,8 @@ if return_code == 0:
         # paste results in the FEM result object
         prn_upd("paste results in the FEM result object\n")
         t0 = time.time()
-        resVol = ft.pasteResults(doc, elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm)
+        resVol = ft.pasteResults(gnl, doc, elNodes, noCoord, nocoord_old, displacements, disp_el, eigenval, eigenvec, tet10stress,
+                                 tet10peeq, tet10csr, tet10svm, maxImp)
         t1 = time.time()
         t[5] = t1 - t0
         prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
@@ -168,8 +175,8 @@ if return_code == 0:
         prn_upd("export results to VTK\n")
         t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
-        ft.exportVTK(elNodes, noCoord, displacements, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, sig_yield,
-                     VTKfile)
+        ft.exportVTK(gnl, elNodes, noCoord, nocoord_old, displacements, disp_el, eigenval, eigenvec, tet10stress, tet10peeq,
+                     tet10csr, tet10svm, tet10triax, sig_yield, VTKfile, maxImp)
         t1 = time.time()
         t[6] = t1 - t0
         prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
@@ -177,7 +184,7 @@ if return_code == 0:
     timer = [f"extract information from FreeCAD objects....................... {t[0]:7.3f} seconds",
              f"prepare finite element input................................... {t[1]:7.3f} seconds",
              f"calculate the global stiffness matrix and global load vector... {t[2]:7.3f} seconds",
-             f"solve the global siffness matrix equation...................... {t[3]:7.3f} seconds",
+             f"solve the global stiffness matrix equation...................... {t[3]:7.3f} seconds",
              f"map stresses to nodal points................................... {t[4]:7.3f} seconds",
              f"paste results in the FEM result object......................... {t[5]:7.3f} seconds",
              f"export results to VTK.......................................... {t[6]:7.3f} seconds"]
@@ -189,9 +196,22 @@ if return_code == 0:
     file_path = os.path.join(mdir, "output files", name + '.out')
 
     with open(file_path, "w") as f:
-        f.write("model name:{0: >30}\n".format(name))
-        f.write("No. of elements:{0: >25}\n".format(ne))
-        f.write("No. of Degrees of freedom:{0: >15}\n".format(nn))
+        f.write("model name:{0: >50}\n".format(name))
+        f.write("No. of elements:{0: >45}\n".format(ne))
+        f.write("No. of Degrees of freedom:{0: >35}\n".format(nn))
+        if gnl == "GNLY":
+            if float(nstep) == 1.0:
+                f.write("analysis type:{0: >47}\n".format("elastic buckling analysis"))
+                f.write("elastic buckling factors:{0: >36}\n".format(str(eigenval)))
+            else:
+                f.write("analysis type:{0: >47}\n".format("elastic-plastic, geometric non-linear"))
+                f.write("elastic buckling factors:{0: >36}\n".format(str(eigenval)))
+        else:
+            if float(nstep) == 1.0:
+                f.write("analysis type: elastic\n")
+            else:
+                f.write("analysis type: elastic-plastic, geometric linear\n")
+
         f.write(
             "\n=========================================================================================================================\n\n")
         f.write("Sum of loads x-direction: {0: >15.2e}\n".format(loadsumx))

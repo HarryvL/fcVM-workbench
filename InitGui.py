@@ -60,8 +60,9 @@ class fcVMWorkbench(Workbench):
     ToolTip = "Plastic collapse analysis with the von Mises material model"
 
     def __init__(self):
-        import task_result_mechanical
-        sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
+        pass
+        # import task_result_mechanical
+        # sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
 
     def GetClassName(self):
         return "Gui::PythonWorkbench"
@@ -83,7 +84,6 @@ class fcVMWorkbench(Workbench):
         import dummyVM
         self.dir_name = os.path.dirname(dummyVM.file_path())
 
-
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
             self.doc = FreeCAD.newDocument("fcVM")
@@ -94,11 +94,14 @@ class fcVMWorkbench(Workbench):
 
         self.sum_file_path = os.path.join(self.dir_name, "source code", "fcVM_sum.FCMacro")
 
-        self.disp_option = "incremental"
+        self.disp_option = "total"
 
         self.csr_option = "PEEQ"
 
         self.averaged_option = "unaveraged"
+
+        self.gnl_option = "GNLN"
+
 
         class DocObserver(object):  # document Observer
             def __init__(self, workbench_instance):
@@ -126,36 +129,43 @@ class fcVMWorkbench(Workbench):
 
         fcVM_window.startBtn.clicked.connect(self.start_clicked)
         fcVM_window.quitBtn.clicked.connect(self.Deactivated)
-        fcVM_window.resetBtn.clicked.connect(self.reset_clicked)
+        # fcVM_window.resetBtn.clicked.connect(self.reset_clicked)
         fcVM_window.saveBtn.clicked.connect(self.save_clicked)
         fcVM_window.sumBtn.clicked.connect(self.sum_clicked)
         fcVM_window.totalRbtn.toggled.connect(self.btn_state)
         fcVM_window.incrRbtn.toggled.connect(self.btn_state)
+        fcVM_window.gnlnRbtn.toggled.connect(self.btn_state)
+        fcVM_window.gnlyRbtn.toggled.connect(self.btn_state)
         fcVM_window.peeqRbtn.toggled.connect(self.btn_state)
         fcVM_window.csrRbtn.toggled.connect(self.btn_state)
-        fcVM_window.averagedChk.toggled.connect(self.btn_state)
+        # fcVM_window.averagedChk.toggled.connect(self.btn_state)
 
         fcVM_window.max_iter.textChanged.connect(self.max_iter_changed)
-        fcVM_window.relax.textChanged.connect(self.relax_changed)
-        fcVM_window.scale_1.textChanged.connect(self.scale_1_changed)
-        fcVM_window.scale_2.textChanged.connect(self.scale_2_changed)
-        fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
+        # fcVM_window.relax.textChanged.connect(self.relax_changed)
+        # fcVM_window.scale_1.textChanged.connect(self.scale_1_changed)
+        # fcVM_window.scale_2.textChanged.connect(self.scale_2_changed)
+        # fcVM_window.scale_3.textChanged.connect(self.scale_3_changed)
         fcVM_window.Hinput.textChanged.connect(self.Hinput_changed)
+        fcVM_window.maxImp.textChanged.connect(self.maxImp_changed)
+        fcVM_window.ev1.textChanged.connect(self.ev1_changed)
+        fcVM_window.ev2.textChanged.connect(self.ev2_changed)
 
         fcVM_window.YSinput.setValidator(double_validator)
         fcVM_window.Hinput.setValidator(double_validator)
         fcVM_window.USinput.setValidator(double_validator)
-        fcVM_window.GXinput.setValidator(double_validator)
-        fcVM_window.GYinput.setValidator(double_validator)
+        # fcVM_window.GXinput.setValidator(double_validator)
+        # fcVM_window.GYinput.setValidator(double_validator)
         fcVM_window.GZinput.setValidator(double_validator)
         fcVM_window.steps.setValidator(int_validator)
         fcVM_window.max_iter.setValidator(int_validator)
         fcVM_window.error.setValidator(double_validator)
-        fcVM_window.relax.setValidator(double_validator)
-        fcVM_window.scale_1.setValidator(double_validator)
-        fcVM_window.scale_2.setValidator(double_validator)
-        fcVM_window.scale_3.setValidator(double_validator)
+        # fcVM_window.relax.setValidator(double_validator)
+        # fcVM_window.scale_1.setValidator(double_validator)
+        # fcVM_window.scale_2.setValidator(double_validator)
+        # fcVM_window.scale_3.setValidator(double_validator)
         fcVM_window.target_LF.setValidator(double_validator)
+        fcVM_window.maxImp.setValidator(double_validator)
+        fcVM_window.ev1.setValidator(double_validator)
 
         self.YSinput_default = "240.0"
         self.Hinput_default = "0.0"
@@ -170,10 +180,14 @@ class fcVMWorkbench(Workbench):
         self.scale_1_default = "2.0"
         self.scale_2_default = "1.2"
         self.scale_3_default = "1.2"
-        self.target_LF_default = "2.0"
-        self.disp_option_default = "incremental"
+        self.target_LF_default = "1.0"
+        self.disp_option_default = "total"
         self.csr_option_default = "PEEQ"
+        self.gnl_option_default = "GNLN"
         self.averaged_Chk_default = "unaveraged"
+        self.maxImp_default = "1.0"
+        self.ev1_default = "1.0"
+        self.ev2_default = "0.0"
 
         self.open_file()
 
@@ -210,39 +224,44 @@ class fcVMWorkbench(Workbench):
         self.Deactivated()
 
     def reset_clicked(self):
-        fcVM_window.max_iter.setText(self.max_iter_default)
-        fcVM_window.error.setText(self.error_default)
-        fcVM_window.relax.setText(self.relax_default)
-        fcVM_window.scale_1.setText(self.scale_1_default)
-        fcVM_window.scale_2.setText(self.scale_2_default)
-        fcVM_window.scale_3.setText(self.scale_3_default)
-        fcVM_window.relax.setPalette(self.palette_standard)
-        fcVM_window.scale_1.setPalette(self.palette_standard)
-        fcVM_window.scale_2.setPalette(self.palette_standard)
-        fcVM_window.scale_3.setPalette(self.palette_standard)
-        fcVM_window.incrRbtn.setChecked(True)
-        fcVM_window.averagedChk.setChecked(False)
+        pass
+        # fcVM_window.max_iter.setText(self.max_iter_default)
+        # fcVM_window.error.setText(self.error_default)
+        # fcVM_window.relax.setText(self.relax_default)
+        # fcVM_window.scale_1.setText(self.scale_1_default)
+        # fcVM_window.scale_2.setText(self.scale_2_default)
+        # fcVM_window.scale_3.setText(self.scale_3_default)
+        # fcVM_window.relax.setPalette(self.palette_standard)
+        # fcVM_window.scale_1.setPalette(self.palette_standard)
+        # fcVM_window.scale_2.setPalette(self.palette_standard)
+        # fcVM_window.scale_3.setPalette(self.palette_standard)
+        # fcVM_window.incrRbtn.setChecked(True)
+        # fcVM_window.averagedChk.setChecked(False)
 
     def save_clicked(self):
         inp_file_path = os.path.join(self.dir_name, "control files", self.file_name + '.inp')
         with open(inp_file_path, "w") as f:
             f.write(fcVM_window.YSinput.text() + "\n")
-            f.write(fcVM_window.GXinput.text() + "\n")
-            f.write(fcVM_window.GYinput.text() + "\n")
+            f.write(self.GXinput_default + "\n")
+            f.write(self.GYinput_default + "\n")
             f.write(fcVM_window.GZinput.text() + "\n")
             f.write(fcVM_window.steps.text() + "\n")
             f.write(fcVM_window.max_iter.text() + "\n")
             f.write(fcVM_window.error.text() + "\n")
-            f.write(fcVM_window.relax.text() + "\n")
-            f.write(fcVM_window.scale_1.text() + "\n")
-            f.write(fcVM_window.scale_2.text() + "\n")
-            f.write(fcVM_window.scale_3.text() + "\n")
+            f.write(self.relax_default + "\n")
+            f.write(self.scale_1_default + "\n")
+            f.write(self.scale_2_default + "\n")
+            f.write(self.scale_3_default + "\n")
             f.write(self.disp_option + "\n")
             f.write(fcVM_window.USinput.text() + "\n")
             f.write(fcVM_window.Hinput.text() + "\n")
             f.write(fcVM_window.target_LF.text() + "\n")
             f.write(self.csr_option + "\n")
-            f.write(self.averaged_option + "\n")
+            f.write(self.averaged_Chk_default + "\n")
+            f.write(self.gnl_option + "\n")
+            f.write(fcVM_window.maxImp.text() + "\n")
+            f.write(fcVM_window.ev1.text() + "\n")
+            f.write(fcVM_window.ev2.text() + "\n")
 
     def sum_clicked(self):
         fcVM_sum = open(self.sum_file_path).read()
@@ -255,16 +274,16 @@ class fcVMWorkbench(Workbench):
         try:
             with open(inp_file_path, "r") as f:
                 fcVM_window.YSinput.setText(str(f.readline().strip()))
-                fcVM_window.GXinput.setText(str(f.readline().strip()))
-                fcVM_window.GYinput.setText(str(f.readline().strip()))
+                f.readline()  # GXinput
+                f.readline()  # GYinput
                 fcVM_window.GZinput.setText(str(f.readline().strip()))
                 fcVM_window.steps.setText(str(f.readline().strip()))
                 fcVM_window.max_iter.setText(str(f.readline().strip()))
                 fcVM_window.error.setText(str(f.readline().strip()))
-                fcVM_window.relax.setText(str(f.readline().strip()))
-                fcVM_window.scale_1.setText(str(f.readline().strip()))
-                fcVM_window.scale_2.setText(str(f.readline().strip()))
-                fcVM_window.scale_3.setText(str(f.readline().strip()))
+                f.readline()  # relax
+                f.readline()  # scale_1
+                f.readline()  # scale_2
+                f.readline()  # scale_3
                 if str(f.readline().strip()) == "total":
                     fcVM_window.totalRbtn.setChecked(True)
                 else:
@@ -289,89 +308,145 @@ class fcVMWorkbench(Workbench):
                     fcVM_window.csrRbtn.setChecked(True)
                 else:
                     fcVM_window.peeqRbtn.setChecked(True)
-                avBtninp = str(f.readline().strip())
-                if avBtninp == "averaged":
-                    fcVM_window.averagedChk.setChecked(True)
+                f.readline()
+                # if avBtninp == "averaged":
+                #     fcVM_window.averagedChk.setChecked(True)
+                # else:
+                #     fcVM_window.averagedChk.setChecked(False)
+                gnlBtninp = f.readline().strip()
+                if gnlBtninp == "GNLN":
+                    fcVM_window.gnlnRbtn.setChecked(True)
+                elif gnlBtninp == "GNLY":
+                    fcVM_window.gnlyRbtn.setChecked(True)
+                maxImpinp = str(f.readline().strip())
+                if maxImpinp == "":
+                    fcVM_window.maxImp.setText(self.maxImp_default)
                 else:
-                    fcVM_window.averagedChk.setChecked(False)
+                    fcVM_window.maxImp.setText(maxImpinp)
+                ev1inp = str(f.readline().strip())
+                if ev1inp == "":
+                    fcVM_window.ev1.setText(self.ev1_default)
+                else:
+                    fcVM_window.ev1.setText(ev1inp)
+                ev2inp = str(f.readline().strip())
+                if ev2inp == "":
+                    fcVM_window.ev2.setText(self.ev2_default)
+                else:
+                    fcVM_window.ev2.setText(ev2inp)
+
 
 
         except FileNotFoundError:
             fcVM_window.YSinput.setText(self.YSinput_default)
             fcVM_window.USinput.setText(self.USinput_default)
-            fcVM_window.GXinput.setText(self.GXinput_default)
-            fcVM_window.GYinput.setText(self.GYinput_default)
+            # fcVM_window.GXinput.setText(self.GXinput_default)
+            # fcVM_window.GYinput.setText(self.GYinput_default)
             fcVM_window.GZinput.setText(self.GZinput_default)
             fcVM_window.steps.setText(self.steps_default)
             fcVM_window.max_iter.setText(self.max_iter_default)
             fcVM_window.error.setText(self.error_default)
-            fcVM_window.relax.setText(self.relax_default)
-            fcVM_window.scale_1.setText(self.scale_1_default)
-            fcVM_window.scale_2.setText(self.scale_2_default)
-            fcVM_window.scale_3.setText(self.scale_3_default)
-            fcVM_window.incrRbtn.setChecked(True)
+            # fcVM_window.relax.setText(self.relax_default)
+            # fcVM_window.scale_1.setText(self.scale_1_default)
+            # fcVM_window.scale_2.setText(self.scale_2_default)
+            # fcVM_window.scale_3.setText(self.scale_3_default)
+            fcVM_window.totalRbtn.setChecked(True)
+            fcVM_window.gnlnRbtn.setChecked(True)
             fcVM_window.USinput.setText(self.USinput_default)
             fcVM_window.Hinput.setText(self.Hinput_default)
             fcVM_window.target_LF.setText(self.target_LF_default)
-            fcVM_window.averagedChk.setChecked(False)
+            # fcVM_window.averagedChk.setChecked(False)
+            fcVM_window.maxImp.setText(self.maxImp_default)
+            fcVM_window.ev1.setText(self.ev1_default)
+            fcVM_window.ev2.setText(self.ev2_default)
+
 
     def max_iter_changed(self):
-        if (fcVM_window.max_iter.text() != self.max_iter_default):
-            fcVM_window.max_iter.setPalette(self.palette_warning)
-        else:
-            fcVM_window.max_iter.setPalette(self.palette_standard)
+        pass
+        # if (fcVM_window.max_iter.text() != self.max_iter_default):
+        #     fcVM_window.max_iter.setPalette(self.palette_warning)
+        # else:
+        #     fcVM_window.max_iter.setPalette(self.palette_standard)
 
     def relax_changed(self):
-        if (fcVM_window.relax.text() != self.relax_default):
-            if fcVM_window.relax.text() == "":
-                fcVM_window.relax.setText("0.0")
-            if float(fcVM_window.relax.text()) > 1.5:
-                fcVM_window.relax.setText("1.5")
-            elif float(fcVM_window.relax.text()) < 1.0:
-                fcVM_window.relax.setText("1.0")
-            fcVM_window.relax.setPalette(self.palette_warning)
-        else:
-            fcVM_window.relax.setPalette(self.palette_standard)
+        pass
+        # if (fcVM_window.relax.text() != self.relax_default):
+        #     if fcVM_window.relax.text() == "":
+        #         fcVM_window.relax.setText("0.0")
+        #     if float(fcVM_window.relax.text()) > 1.5:
+        #         fcVM_window.relax.setText("1.5")
+        #     elif float(fcVM_window.relax.text()) < 1.0:
+        #         fcVM_window.relax.setText("1.0")
+        #     fcVM_window.relax.setPalette(self.palette_warning)
+        # else:
+        #     fcVM_window.relax.setPalette(self.palette_standard)
 
     def scale_1_changed(self):
-        if (fcVM_window.scale_1.text() != self.scale_1_default):
-            if fcVM_window.scale_1.text() == "":
-                fcVM_window.scale_1.setText("0.0")
-            if float(fcVM_window.scale_1.text()) > 3.0:
-                fcVM_window.scale_1.setText("3.0")
-            elif float(fcVM_window.scale_1.text()) < 1.0:
-                fcVM_window.scale_1.setText("1.0")
-            fcVM_window.scale_1.setPalette(self.palette_warning)
-        else:
-            fcVM_window.scale_1.setPalette(self.palette_standard)
+        pass
+        # if (fcVM_window.scale_1.text() != self.scale_1_default):
+        #     if fcVM_window.scale_1.text() == "":
+        #         fcVM_window.scale_1.setText("0.0")
+        #     if float(fcVM_window.scale_1.text()) > 3.0:
+        #         fcVM_window.scale_1.setText("3.0")
+        #     elif float(fcVM_window.scale_1.text()) < 1.0:
+        #         fcVM_window.scale_1.setText("1.0")
+        #     fcVM_window.scale_1.setPalette(self.palette_warning)
+        # else:
+        #     fcVM_window.scale_1.setPalette(self.palette_standard)
 
     def scale_2_changed(self):
-        if (fcVM_window.scale_2.text() != self.scale_2_default):
-            if fcVM_window.scale_2.text() == "":
-                fcVM_window.scale_2.setText("0.0")
-            if float(fcVM_window.scale_2.text()) > 2.0:
-                fcVM_window.scale_2.setText("2.0")
-            elif float(fcVM_window.scale_2.text()) < 1.0:
-                fcVM_window.scale_2.setText("1.0")
-            fcVM_window.scale_2.setPalette(self.palette_warning)
-        else:
-            fcVM_window.scale_2.setPalette(self.palette_standard)
+        pass
+        # if (fcVM_window.scale_2.text() != self.scale_2_default):
+        #     if fcVM_window.scale_2.text() == "":
+        #         fcVM_window.scale_2.setText("0.0")
+        #     if float(fcVM_window.scale_2.text()) > 2.0:
+        #         fcVM_window.scale_2.setText("2.0")
+        #     elif float(fcVM_window.scale_2.text()) < 1.0:
+        #         fcVM_window.scale_2.setText("1.0")
+        #     fcVM_window.scale_2.setPalette(self.palette_warning)
+        # else:
+        #     fcVM_window.scale_2.setPalette(self.palette_standard)
 
     def scale_3_changed(self):
-        if fcVM_window.scale_3.text() == "":
-            fcVM_window.scale_3.setText("0.0")
-        if (fcVM_window.scale_3.text() != self.scale_3_default):
-            if float(fcVM_window.scale_3.text()) > 2.0:
-                fcVM_window.scale_3.setText("2.0")
-            elif float(fcVM_window.scale_3.text()) < 1.0:
-                fcVM_window.scale_3.setText("1.0")
-            fcVM_window.scale_3.setPalette(self.palette_warning)
-        else:
-            fcVM_window.scale_3.setPalette(self.palette_standard)
+        pass
+        # if fcVM_window.scale_3.text() == "":
+        #     fcVM_window.scale_3.setText("0.0")
+        # if (fcVM_window.scale_3.text() != self.scale_3_default):
+        #     if float(fcVM_window.scale_3.text()) > 2.0:
+        #         fcVM_window.scale_3.setText("2.0")
+        #     elif float(fcVM_window.scale_3.text()) < 1.0:
+        #         fcVM_window.scale_3.setText("1.0")
+        #     fcVM_window.scale_3.setPalette(self.palette_warning)
+        # else:
+        #     fcVM_window.scale_3.setPalette(self.palette_standard)
 
     def Hinput_changed(self):
-        if float(fcVM_window.Hinput.text()) < 0.0:
+        inp = fcVM_window.Hinput.text()
+        check = inp != "" and inp != "-"
+        if check and float(inp) < 0.0:
             fcVM_window.Hinput.setText("0.0")
+
+    def maxImp_changed(self):
+        inp = fcVM_window.maxImp.text()
+        check = inp != "" and inp != "-"
+        if check and float(inp) < 0.0:
+            fcVM_window.maxImp.setText("0.0")
+
+    def ev1_changed(self):
+        inp = fcVM_window.ev1.text()
+        check = inp != "" and inp != "-"
+        if check and float(inp) < 0.0:
+            fcVM_window.ev1.setText("0.0")
+        if check and float(inp) > 1.0:
+            fcVM_window.ev1.setText("1.0")
+
+    def ev2_changed(self):
+        inp = fcVM_window.ev2.text()
+        check = inp != "" and inp != "-"
+        if check and float(inp) < 0.0:
+            fcVM_window.ev2.setText("0.0")
+        if check and float(inp) > 1.0:
+            fcVM_window.ev2.setText("1.0")
+
 
     def btn_state(self):
         if fcVM_window.totalRbtn.isChecked():
@@ -382,10 +457,15 @@ class fcVMWorkbench(Workbench):
             self.csr_option = "PEEQ"
         if fcVM_window.csrRbtn.isChecked():
             self.csr_option = "CSR"
-        if fcVM_window.averagedChk.isChecked():
-            self.averaged_option = "averaged"
-        else:
-            self.averaged_option = "unaveraged"
+        if fcVM_window.gnlyRbtn.isChecked():
+            self.gnl_option = "GNLY"
+        if fcVM_window.gnlnRbtn.isChecked():
+            self.gnl_option = "GNLN"
+
+        # if fcVM_window.averagedChk.isChecked():
+        #     self.averaged_option = "averaged"
+        # else:
+        #     self.averaged_option = "unaveraged"
 
 
 FreeCADGui.addWorkbench(fcVMWorkbench)

@@ -1,0 +1,19 @@
+model name:                                     buckling_test
+No. of elements:                                           77
+No. of Degrees of freedom:                                216
+analysis type:                      elastic buckling analysis
+elastic buckling factors:               [205.98448 206.00604]
+
+=========================================================================================================================
+
+Sum of loads x-direction:       -1.00e+00
+Sum of loads y-direction:        0.00e+00
+Sum of loads z-direction:        0.00e+00
+
+=========================================================================================================================
+
+Gauss point         x         y         z      load      disp      peeq  pressure   svmises     triax    eps_cr   csr_max
+          0  8.14e+02  7.94e+00  9.32e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+
+=========================================================================================================================
+

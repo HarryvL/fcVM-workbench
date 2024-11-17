@@ -1,0 +1,19 @@
+model name:                                  cruciform_column
+No. of elements:                                         5494
+No. of Degrees of freedom:                              10919
+analysis type:                      elastic buckling analysis
+elastic buckling factors:             [2029.86781 2193.73165]
+
+=========================================================================================================================
+
+Sum of loads x-direction:       -2.57e-16
+Sum of loads y-direction:        0.00e+00
+Sum of loads z-direction:       -3.04e+02
+
+=========================================================================================================================
+
+Gauss point         x         y         z      load      disp      peeq  pressure   svmises     triax    eps_cr   csr_max
+          0  9.63e+02  2.23e+00  2.93e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+
+=========================================================================================================================
+

@@ -21,6 +21,7 @@
 # ***************************************************************************
 
 import os
+import sys
 import time
 import math
 import dummyVM
@@ -42,6 +43,8 @@ import matplotlib.pyplot as plt
 from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
+from scipy.sparse.linalg import eigsh
+from scipy.linalg import eig
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 from matplotlib.widgets import Button, TextBox
@@ -374,7 +377,7 @@ def shp10tet(xi, et, ze):
     return shp
 
 
-@jit("float64(float64, float64, float64, float64[:,:], float64[:,:])", nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def dshp10tet(xi, et, ze, xl, bmat):
     dshp = np.zeros((3, 10), dtype=np.float64)
     dshpg = np.zeros((3, 10), dtype=np.float64)
@@ -453,12 +456,18 @@ def dshp10tet(xi, et, ze, xl, bmat):
             for k in range(3):
                 dshpg[i][j] += xsi[k][i] * dshp[k][j]
 
+    # lmat = dshpg.T
+
     # computation of the strain interpolation matrix bmat
     for i in range(10):
         i3 = 3 * i
         d00 = dshpg[0][i]
         d10 = dshpg[1][i]
         d20 = dshpg[2][i]
+        # if i==0:
+        #     print("d00: ", d00)
+        #     print("d10: ", d10)
+        #     print("d20: ", d20)
         bmat[0][i3] = d00
         bmat[1][i3 + 1] = d10
         bmat[2][i3 + 2] = d20
@@ -469,7 +478,7 @@ def dshp10tet(xi, et, ze, xl, bmat):
         bmat[5][i3 + 1] = d20
         bmat[5][i3 + 2] = d10
 
-    return xsj
+    return xsj, dshpg
 
 
 # shape functions and their derivatives for a 6-node triangular interface element
@@ -623,15 +632,15 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     print(f"ne = {ne}")
     print(f"ns = {ns}\n")
 
-    xle = np.zeros((3, 3), dtype=types.float64)  # coordinates of load line nodes
-    xlf = np.zeros((3, 6), dtype=types.float64)  # coordinates of load face nodes
-    xlv = np.zeros((10, 3), dtype=types.float64)  # coordinates of volume element nodes
-    glv = np.zeros((3 * nn), dtype=types.float64)  # global load vector
-    row = np.zeros(ns, dtype=types.int64)  # row indices of COO matrix
-    col = np.zeros(ns, dtype=types.int64)  # column indices of COO matrix
-    stm = np.zeros(ns, dtype=types.float64)  # stiffness values of COO matrix
-    modf = np.zeros((3 * nn), dtype=types.float64)  # modification to the stiffness matrix for displacement BCs
-    dof = np.zeros(30, dtype=types.int64)
+    xle = np.zeros((3, 3), dtype=np.float64)  # coordinates of load line nodes
+    xlf = np.zeros((3, 6), dtype=np.float64)  # coordinates of load face nodes
+    xlv = np.zeros((10, 3), dtype=np.float64)  # coordinates of volume element nodes
+    glv = np.zeros((3 * nn), dtype=np.float64)  # global load vector
+    row = np.zeros(ns, dtype=np.int64)  # row indices of COO matrix
+    col = np.zeros(ns, dtype=np.int64)  # column indices of COO matrix
+    stm = np.zeros(ns, dtype=np.float64)  # stiffness values of COO matrix
+    modf = np.zeros((3 * nn), dtype=np.float64)  # modification to the stiffness matrix for displacement BCs
+    dof = np.zeros(30, dtype=np.int64)
     dmat = np.zeros((6, 6), dtype=np.float64)
     bmatV = np.zeros((6, 30), dtype=np.float64)
     x = np.zeros((4 * ne, 3), dtype=np.float64)
@@ -744,7 +753,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
             et = ip[1]
             ze = ip[2]
             shp = shp10tet(xi, et, ze)
-            xsj = dshp10tet(xi, et, ze, xlv, bmatV)
+            xsj, dshpg = dshp10tet(xi, et, ze, xlv, bmatV)
             esm += np.dot(bmatV.T, np.dot(dmat, bmatV)) * ip[3] * abs(xsj)
             gamma[0::3] += grav_x * density * shp * ip[3] * abs(xsj)
             gamma[1::3] += grav_y * density * shp * ip[3] * abs(xsj)
@@ -808,12 +817,298 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     return stm, row, col, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
 
 
+# @jit(nopython=True, cache=True)
+def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, loadfaces, pressure,
+            loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, disp_new, du, sig_old, pgp,
+            Et_E):
+
+    gp10, gp6, gp2 = gaussPoints()
+    ne = len(elNodes)  # number of volume elements
+    nn = len(nocoord)  # number of degrees of freedom
+
+    # normal analysis - number of entries in the lower diagonal of the stiffness matrix
+    ns = int((30 * 30 + 30) / 2 * ne)
+
+    # linear buckling analysis - number of entries in the full stiffness matrix
+    nslb = int(30 * 30 * ne)
+
+    print(f"ne = {ne}")
+    print(f"ns = {ns}\n")
+    xle = np.zeros((3, 3), dtype=np.float64)  # coordinates of load line nodes
+    xlf = np.zeros((3, 6), dtype=np.float64)  # coordinates of load face nodes
+    xlv = np.zeros((10, 3), dtype=np.float64)  # coordinates of volume element nodes
+    glv = np.zeros((3 * nn), dtype=np.float64)  # global load vector
+    if (float(nstep) > 1.0):
+        row = np.zeros(ns, dtype=np.int64)  # row indices of COO matrix
+        col = np.zeros(ns, dtype=np.int64)  # column indices of COO matrix
+    else:
+        row = np.zeros(nslb, dtype=np.int64)  # row indices of COO matrix
+        col = np.zeros(nslb, dtype=np.int64)  # column indices of COO matrix
+    stm = np.zeros(ns, dtype=np.float64)  # stiffness values of COO matrix
+    stms = np.zeros(nslb, dtype=np.float64)  # stiffness values of COO matrix
+    stmg = np.zeros(nslb, dtype=np.float64)  # stiffness values of COO matrix
+    modf = np.zeros((3 * nn), dtype=np.float64)  # modification to the stiffness matrix for displacement BCs
+    modfs = np.zeros((3 * nn), dtype=np.float64)  # modification to the stiffness matrix for displacement BCs
+    modfg = np.zeros((3 * nn), dtype=np.float64)  # modification to the stiffness matrix for displacement BCs
+    dof = np.zeros(30, dtype=np.int64)
+    dmat = np.zeros((6, 6), dtype=np.float64)
+    bmatV = np.zeros((6, 30), dtype=np.float64)
+    x = np.zeros((4 * ne, 3), dtype=np.float64)
+
+    #   calculate element load vectors for pressure and add to global vector
+
+    for face in range(len(pressure) - 1):  # first pressure value is a dummy signature for numba
+        if len(pressure) == 1:
+            break
+
+        nda = loadfaces[face + 1]  # node numbers of loaded face
+        for i in range(3):
+            for j in range(6):
+                nd = nda[j]
+                idof = 3 * (nd - 1) + i
+                xlf[i][j] = nocoord[nd - 1][i] + disp_new[
+                    idof]  # coordinates of loaded face nodes - pressure on stretched surface
+
+        # integrate element load vector
+        for index in range(len(gp6)):
+            xi = gp6[index][0]
+            et = gp6[index][1]
+            xsj, shp, bmatS, xx, xt, xp = shape6tri(xi, et, xlf)
+            nl = 0
+            for i in range(len(loadfaces[face] - 1)):
+                nd = loadfaces[face + 1][i]
+                iglob = nd - 1
+                iglob3 = 3 * iglob
+                for k in range(3):
+                    load = shp[nl] * pressure[face + 1] * xp[k] * abs(xsj) * gp6[index][2]
+                    glv[iglob3 + k] += load
+                nl += 1
+
+    for vertex in range(len(loadvertices) - 1):  # first vertex is a dummy signature for numba
+        if len(loadvertices) == 1:
+            break
+
+        nd = loadvertices[vertex + 1][0]
+        iglob = nd - 1
+        iglob3 = 3 * iglob
+        glv[iglob3:iglob3 + 3] += vertexloads[vertex + 1]
+
+    for face in range(len(loadfaces_uni) - 1):  # first face is a dummy signature for numba
+        if len(loadfaces_uni) == 1:
+            break
+
+        nda = loadfaces_uni[face + 1]  # node numbers of loaded face
+        for i in range(3):
+            for j in range(6):
+                nd = nda[j]
+                xlf[i][j] = nocoord[nd - 1][i]  # coordinates of loaded face nodes - load on original surface
+
+        # integrate element load vector
+        for index in range(len(gp6)):
+            xi = gp6[index][0]
+            et = gp6[index][1]
+            xsj, shp, bmatS, xx, xt, xp = shape6tri(xi, et, xlf)
+            nl = 0
+            for i in range(len(loadfaces_uni[face] - 1)):
+                nd = loadfaces_uni[face + 1][i]
+                iglob = nd - 1
+                iglob3 = 3 * iglob
+                load = shp[nl] * faceloads[face + 1] * abs(xsj) * gp6[index][2]
+                glv[iglob3:iglob3 + 3] += load
+                nl += 1
+
+    for edge in range(len(loadedges) - 1):  # first edge is a dummy signature for numba
+        if len(loadedges) == 1:
+            break
+
+        nda = loadedges[edge + 1]  # node numbers of loaded edge
+        for i in range(3):
+            for j in range(3):
+                nd = nda[j]
+                xle[i][j] = nocoord[nd - 1][i]  # coordinates of loaded edge nodes - load on original edge
+        # integrate element load vector
+        for index in range(len(gp2)):
+            xi = gp2[index][0]
+            xsj, shp = shape2lin(xi, xle)
+            nl = 0
+            for i in range(len(loadedges[edge] - 1)):
+                nd = loadedges[edge + 1][i]
+                iglob = nd - 1
+                iglob3 = 3 * iglob
+                load = shp[nl] * edgeloads[edge + 1] * abs(xsj) * gp2[index][1]
+                glv[iglob3:iglob3 + 3] += load
+                nl += 1
+
+    # for each volume element calculate the element stiffness matrix
+    # and gravity load vector and add to global matrix and vector
+
+    pos = 0
+
+    V = 0.0
+
+    hooke(0, materialbyElement, dmat)
+    density = materialbyElement[0][2]
+    E = materialbyElement[0][0]
+    nu = materialbyElement[0][1]
+    G = E / (1.0 + nu) / 2.0
+    if Et_E > 0.95: Et_E = 0.95
+    Et = Et_E * E
+    H = Et / (1.0 - Et_E)
+
+    # H = 20.0 * E
+
+    for el, nodes in enumerate(elNodes):
+        esm = np.zeros((30, 30), dtype=np.float64)
+        nsm = np.zeros((30, 30), dtype=np.float64)
+        gamma = np.zeros((30), dtype=np.float64)
+        elpos = 24 * el
+        # set up nodal values for this element
+        for i in range(3):
+            for j in range(10):
+                nd = nodes[j]
+                idof = 3 * (nd - 1) + i
+                xlv[j][i] = nocoord[nd - 1][i] + disp_new[
+                    idof] # + du[idof] # stretched coordinates (WARNING: gravity loads change)
+                # TODO: gamma should be based on original coordinates and esm on updated coordinates
+
+        # integrate element matrix
+        for i, ip in enumerate(gp10):
+            ip4 = 4 * el + i
+            ip24 = 24 * el + 6 * i
+            sig0 = sig_old[ip24:ip24 + 6]
+            sig = np.array([[sig0[0], sig0[3], sig0[4]],
+                            [sig0[3], sig0[1], sig0[5]],
+                            [sig0[4], sig0[5], sig0[2]]])
+            # print("sigma: ")
+            # print(sig)
+            xi = ip[0]
+            et = ip[1]
+            ze = ip[2]
+            shp = shp10tet(xi, et, ze)
+            xsj, dshpg = dshp10tet(xi, et, ze, xlv, bmatV)
+            # print("shape dshpg: ", np.shape(dshpg))
+            if pgp[ip4]:
+                st0, st1, st2, st3, st4, st5 = sig0
+                p = (st0 + st1 + st2) / 3.0
+                st0 -= p
+                st1 -= p
+                st2 -= p
+                svm = np.sqrt(1.5 * (st0 ** 2 + st1 ** 2 + st2 ** 2) +
+                              3.0 * (st3 ** 2 + st4 ** 2 + st5 ** 2))
+                s = np.array([st0, st1, st2, st3, st4, st5])
+                if svm == 0.0: svm = 1.0 # prevent division error in pmat
+                pmat = 3.0 * G * np.outer(s, s) / (1.0 + H / 3.0 / G) / svm ** 2
+                esm += np.dot(bmatV.T, np.dot(dmat - pmat, bmatV)) * ip[3] * abs(xsj)
+            else:
+                esm += np.dot(bmatV.T, np.dot(dmat, bmatV)) * ip[3] * abs(xsj)
+
+            if float(nstep) == 1.0:
+                G = np.kron(dshpg, np.eye(3))
+                S = np.kron(sig, np.eye(3))
+                dnsm = np.dot(G.T, np.dot(S, G)) * ip[3] * abs(xsj)
+                nsm += dnsm
+            gamma[0::3] += grav_x * density * shp * ip[3] * abs(xsj)
+            gamma[1::3] += grav_y * density * shp * ip[3] * abs(xsj)
+            gamma[2::3] += grav_z * density * shp * ip[3] * abs(xsj)
+            V += xsj * ip[3]  # Element volume - not used
+            x[4 * el + i] = np.dot(xlv.T, shp)
+
+        for i in range(10):
+            nd = nodes[i] - 1
+            glv[3 * nd] += gamma[3 * i]
+            glv[3 * nd + 1] += gamma[3 * i + 1]
+            glv[3 * nd + 2] += gamma[3 * i + 2]
+            for j in range(3):
+                dof[3 * i + j] = 3 * nd + j
+
+        if (float(nstep) > 1.0):
+            for i in range(30):
+                dofi = dof[i]
+                if dofi in fix:
+                    row[pos] = dofi
+                    col[pos] = dofi
+                    stm[pos] = 1.0
+                    modf[dofi] += fix[dofi]
+                    pos += 1
+                    for j in range(i):
+                        dofj = dof[j]
+                        if dofj not in fix:
+                            modf[dofj] -= (esm[i][j] + nsm[i][j]) * fix[dofi]
+                else:
+                    for j in range(i + 1):
+                        dofj = dof[j]
+                        if dofj in fix:
+                            modf[dofi] -= (esm[i][j] + nsm[i][j]) * fix[dofj]
+                        else:
+                            if dofi > dofj:
+                                row[pos] = dofi
+                                col[pos] = dofj
+                            else:
+                                row[pos] = dofj
+                                col[pos] = dofi
+                            stm[pos] = esm[i][j] + nsm[i][j]
+                            # stm[pos] = esm[i][j]
+                            stms[pos] = esm[i][j]
+                            stmg[pos] = nsm[i][j]
+                            pos += 1
+        else:
+            for i in range(30):
+                dofi = dof[i]
+                for j in range(30):
+                    dofj = dof[j]
+                    row[pos] = dofi
+                    col[pos] = dofj
+                    stms[pos] = esm[i][j]
+                    stmg[pos] = nsm[i][j]
+                    if i == j and dofi in fix:
+                        stms[pos] *= 100.0
+                    pos += 1
+
+    row = row[:pos]
+    col = col[:pos]
+    stm = stm[:pos]
+    stms = stms[:pos]
+    stmg = stmg[:pos]
+
+    loadsumx = 0.0
+    loadsumy = 0.0
+    loadsumz = 0.0
+    for node in range(nn):
+        dof = 3 * node
+        loadsumx += glv[dof]
+        loadsumy += glv[dof + 1]
+        loadsumz += glv[dof + 2]
+
+    # print("mesh volume", V)
+    # print("loadsumx", loadsumx)
+    # print("loadsumy", loadsumy)
+    # print("loadsumz", loadsumz, "\n")
+
+    # return stms, stmg, row, col, glv, modfs, modfg
+    return stm, stms, stmg, row, col, glv, modf
+
+
 # calculate load-deflection curve
 def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row, col,
              glv, nstep, iterat_max, error_max, relax, scale_re, scale_up, scale_dn, sig_yield_inp, disp_output,
-             ultimate_strain, fcVM_window, Et_E, target_LF, x, noce):
+             ultimate_strain, fcVM_window, Et_E, target_LF, x, noce, fix, grav_x, grav_y, grav_z, loadfaces, pload,
+             loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, gnl, maxImp, ev1, ev2):
+    if gnl == "GNLY":
+        LD = True
+        relax = 1.0
+        disp_output = "total"
+        ev1 = float(ev1)
+        ev2 = float(ev2)
+        maxImp = float(maxImp)
+        scale_up = 1.1
+
+    else:
+        LD = False
+
     ndof = len(glv)  # number of degrees of freedom
     nelem = len(elNodes)  # number of elements
+
+    nocoord_old = np.copy(nocoord)
 
     pr_u = fcVM_window.progressBar.setValue
     st_u = fcVM_window.Step.setText
@@ -854,6 +1149,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     elif settings["solver"] == 3:
         ue = sparse_cholesky.solve_A(f)
 
+    disp_el = ue.copy()
+
     t2 = time.perf_counter()
     prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
 
@@ -870,20 +1167,24 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     triax = np.zeros(4 * nelem, dtype=np.float64)  # triaxiality in Tet10
     pressure = np.zeros(4 * nelem, dtype=np.float64)  # pressure in Tet10
     sigmises = np.zeros(4 * nelem, dtype=np.float64)  # von Mises stress in Tet10
+    pgp = np.full(4 * nelem, False, dtype=bool)
     ecr = np.zeros(4 * nelem, dtype=np.float64)  # critical plastic strain in Tet10
     csr = np.zeros(4 * nelem, dtype=np.float64)  # critical strain ratio in Tet10
-    disp_new = np.zeros(ndof, dtype=np.float64)  # displacement results
+    disp_new = np.zeros(ndof, dtype=np.float64)  # elastic displacement results
     disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
     lbd = np.zeros(1, dtype=np.float64)  # load level
     rfl = np.zeros(1, dtype=np.float64)  # reaction force level (for displacement control)
+    eigenval = np.zeros(1, dtype=np.float64)
+    eigenvec = np.zeros((1, 1), dtype=np.float64)
+    imper = np.zeros(ndof, dtype=np.float64)
 
     gp10, gp6, gp2 = gaussPoints()
 
     # determine elastic reaction force on moving boundary
     if max(movdof) == 1:
         qelastic = np.zeros(3 * len(nocoord), dtype=np.float64)
-        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, ue, sig_old, sig_new, sig_test,
-                           qelastic, Et_E)
+        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, ue, sig_old, sig_new,
+                           sig_test, qelastic, Et_E, LD, pgp)
 
         qelastic *= movdof
         qelnorm = np.linalg.norm(qelastic)
@@ -906,47 +1207,153 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     ecrplot = [0.]
     lout = [0.]
 
-    if float(nstep) == 1.0:
-        # perform an elastic (one-step) analysis
+    # perform an elastic analysis
+    # qin = np.zeros(3 * len(nocoord), dtype=np.float64)
+
+    update_stress_load(gp10, elNodes, nocoord, materialbyElement, 1.0e6 * sig_yield, np.zeros(ndof, dtype=np.float64),
+                       ue, sig_old, sig_new, sig_test, np.zeros(3 * len(nocoord), dtype=np.float64), Et_E, False,
+                       pgp)
+
+    # perform an elastic buckling analysis
+    if LD and maxImp != 0.0:
+        # linear buckling analysis
+        stm, stms, stmg, row, col, glv, modf = calcTSM(1.0, elNodes, nocoord, materialbyElement, fix, grav_x,
+                                                       grav_y, grav_z, loadfaces, pload, loadvertices, vertexloads,
+                                                       loadedges, edgeloads,
+                                                       loadfaces_uni, faceloads, np.zeros(ndof, dtype=np.float64),
+                                                       np.zeros(ndof, dtype=np.float64),
+                                                       sig_new, pgp, Et_E)
+
+        K = scsp.csc_matrix((stms, (row, col)), shape=(ndof, ndof))
+        G = - scsp.csc_matrix((stmg, (row, col)), shape=(ndof, ndof))
+
+        eigenval, eigenvec = eigsh(K, k=2, M=G, sigma=0.1, which='LM', mode='buckling')
+
+        print("buckling load factors: ", eigenval)
+    # print(f"un: {un[-1]}")
+    # print(f"lbd: {lbd[-1]}")
+    # print(f"sig: {sig_new[:6]}")
+
+    if float(nstep) == 1.0:  # elastic and linear buckling analysis
         step = 0
         out_disp = 1
+        disp_new = ue
         lbd = np.append(lbd, 1.0)
         rfl = np.append(rfl, 1.0)
-        disp_new = ue
         un.append(np.max(np.abs(disp_new)))
-        qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-        sig_yield *= 1.0e6
-        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, ue, sig_old, sig_new, sig_test,
-                           qin, Et_E)
-
         cnt = False
+    elif LD and maxImp != 0.0:  # apply imperfection and reset analysis
+
+        ua = ev1 / (ev1 + ev2) * eigenvec[:, 0] + ev2 / (ev1 + ev2) * eigenvec[:, 1]
+        ub = ev1 / (ev1 + ev2) * eigenvec[:, 0] - ev2 / (ev1 + ev2) * eigenvec[:, 1]
+        ma = np.max(np.abs(ua))
+        mb = np.max(np.abs(ub))
+
+        if ma > mb:
+            imax = np.argmax(np.abs(ua))
+            imper = maxImp / ma * np.sign(ua[imax]) * ua
+        else:
+            imax = np.argmax(np.abs(ub))
+            imper = maxImp / mb * np.sign(ub[imax]) * ub
+
+        # imax = np.argmax(np.abs(eigenvec[:, 0]))
+        # imper = (ev1 / (ev1 + ev2) * np.sign(eigenvec[:, 0][imax]) * eigenvec[:, 0] + ev2 / (ev1 + ev2) * np.sign(
+        #     eigenvec[:, 1][imax]) * eigenvec[:, 1]) * maxImp / (
+        #                 ev1 / (ev1 + ev2) * np.max(np.abs(eigenvec[:, 0])) + ev2 / (ev1 + ev2) * np.abs(
+        #             eigenvec[:, 1][imax]))
+
+        print("maximum imperfection: ", np.max(imper))
+
+        nocoord += imper.reshape(-1, 3)
+
+        stm, row, col, glv, modf, _, _, _, _, _, _, _ = calcGSM(elNodes, nocoord,
+                                                                materialbyElement,
+                                                                fix, grav_x, grav_y,
+                                                                grav_z,
+                                                                loadfaces, pload,
+                                                                loadvertices,
+                                                                vertexloads,
+                                                                loadedges,
+                                                                edgeloads,
+                                                                loadfaces_uni,
+                                                                faceloads)
+
+        t0 = time.perf_counter()
+        gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
+        t1 = time.perf_counter()
+        prn_upd("update sparse global stiffness matrix for imperfections: {:.2e} s".format((t1 - t0)))
+        qnorm = np.linalg.norm(glv)
+        if qnorm < 1.0: qnorm = 1.0
+
+        # Cholesky decomposition of the global stiffness matrix and elastic solution using Cholmod
+        t0 = time.perf_counter()
+        if settings["solver"] == 1:
+            factor = cholesky(gsm)
+        elif settings["solver"] == 2:
+            solver = CholeskySolverD(gsm.shape[0], gsm.indptr, gsm.indices, gsm.data, MatrixType.CSC)
+        elif settings["solver"] == 3:
+            sparse_cholesky = SparseCholesky(gsm)
+
+        t1 = time.perf_counter()
+        f = fixdof * glv + modf
+        if settings["solver"] == 1:
+            ue = factor(f)  # elastic solution
+        elif settings["solver"] == 2:
+            ue = np.empty(gsm.shape[0])
+            solver.solve(f, ue)
+        elif settings["solver"] == 3:
+            ue = sparse_cholesky.solve_A(f)
+
+        disp_el = ue.copy()
+
+        t2 = time.perf_counter()
+        prn_upd("sparse Cholesky decomposition of update stiffness matrix: {:.2e} s, elastic solution: {:.2e} s".format(
+            (t1 - t0), (t2 - t1)))
+
+        # initiate analysis
+        dl0 = 1.0 / nstep  # nstep == 1 execute an elastic analysis
+        dl = dl0
+        du = dl * ue
+
+        sig_old = np.zeros(24 * nelem, dtype=np.float64)
+        sig_test = np.zeros(24 * nelem, dtype=np.float64)
+        disp_new = np.zeros(ndof, dtype=np.float64)  # elastic displacement results
+        disp_old = np.zeros(ndof, dtype=np.float64)  # displacement results
+        lbd = np.zeros(1, dtype=np.float64)  # load level
 
     factor_time_tot = 0.0
     iterat_tot = 0
+    mrr = False
+    sig_new = np.zeros(24 * nelem, dtype=np.float64)  # stress in Tet10
+    pgp = np.full(4 * nelem, False, dtype=bool)
 
     while cnt:
         cnt = False
         iRiks = True
         pstep = 0
         pr_u(0)
-        while pstep < nstep:
+        while pstep < nstep and not mrr:
             step += 1
             pstep += 1
             st_u(str(pstep))
             restart = 0
 
+            # if lbd[-1] > 0.9 * eigenval[0]:
+            #     scale_up = 1.0
+
             prn_upd("Step: {}".format(step))
             a = du.copy()  # a: Riks control vector
             if iRiks:
                 sig_old = sig_new.copy()
+                # disp_old = disp_new.copy()
                 lbd = np.append(lbd, lbd[step] + dl)  # lbd: load level
             else:
                 lbd[step + 1] = lbd[step] + dl
 
             # update stresses and loads
             qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-            update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                               qin, Et_E)
+            update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, du, sig_old,
+                               sig_new, sig_test, qin, Et_E, LD, pgp)
 
             # calculate residual load vector
             fex = fixdof * lbd[step + 1] * glv
@@ -955,15 +1362,58 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             rnorm = np.linalg.norm(r)
 
             # out-of-balance error
-            error = rnorm / qnorm
+            error = rnorm / qnorm  # / max(abs(lbd[step + 1]), 0.1)
 
             iterat = 0
             prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
 
-            while error > error_max:
+            # tangent stiffness matrix
+
+            # if error > 1.0e3:
+            #     print("error > 1.0e3")
+            #     break
+
+            while error > error_max and not mrr:
 
                 iterat += 1
                 iterat_tot += 1
+
+                if LD: # and iterat == 1:
+                    # sig_old -> sig_new
+
+                    stm, stms, stmg, row, col, glv, modf = calcTSM(nstep, elNodes, nocoord, materialbyElement, fix,
+                                                                   grav_x, grav_y, grav_z,
+                                                                   loadfaces, pload, loadvertices, vertexloads,
+                                                                   loadedges,
+                                                                   edgeloads,
+                                                                   loadfaces_uni, faceloads, disp_new, du, sig_old,
+                                                                   pgp,
+                                                                   Et_E)
+
+                    t0 = time.perf_counter()
+                    tsm = scsp.csc_matrix((stm, (row, col)),
+                                          shape=(ndof, ndof))  # construct sparse global stiffness matrix
+                    t1 = time.perf_counter()
+                    prn_upd("construct sparse tangent stiffness matrix: {:.2e} s".format((t1 - t0)))
+                    try:
+                        if settings["solver"] == 1:
+                            factor = cholesky(tsm)
+                        elif settings["solver"] == 2:
+                            solver = CholeskySolverD(tsm.shape[0], tsm.indptr, tsm.indices, tsm.data, MatrixType.CSC)
+                        elif settings["solver"] == 3:
+                            sparse_cholesky = SparseCholesky(tsm)
+
+                    except:
+                        print("singular stiffness matrix")
+                        pass
+                    fe = fixdof * glv + modf
+                    if settings["solver"] == 1:
+                        ue = factor(fe)  # elastic solution
+                    elif settings["solver"] == 2:
+                        ue = np.empty(tsm.shape[0])
+                        solver.solve(fe, ue)
+                    elif settings["solver"] == 3:
+                        ue = sparse_cholesky.solve_A(fe)
 
                 f = relax * r
                 t0 = time.perf_counter()
@@ -983,61 +1433,149 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 if iRiks:
                     dl = -np.dot(a, due) / np.dot(a, ue)
                     lbd[step + 1] += dl
+                    aa = np.linalg.norm(a)
+                    print("||a||: ", aa)
+                    # A = np.dot(ue, ue)
+                    # B = 2.0 * (np.dot(du, ue) + np.dot(due, ue))
+                    # C = np.linalg.norm(due + du) ** 2 - np.linalg.norm(a) ** 2
+                    # D = np.sqrt(B ** 2 - 4.0 * A * C)
+                    # print("A, B, C, D: ", A, B, C, D)
+                    # dl1 = (-B + D) / A / 2.0
+                    # dl2 = (-B - D) / A / 2.0
+                    # du1 = du + due + dl1 * ue
+                    # du2 = du + due + dl2 * ue
+                    # if np.dot(du, du1) > np.dot(du, du2):
+                    #     du = du1
+                    #     lbd[step + 1] += dl1
+                    # else:
+                    #     du = du2
+                    #     lbd[step + 1] += dl2
+
                 else:
                     dl = 0.0
+                    # du += due + dl * ue
 
                 # Riks control correction to displacement increment
                 du += due + dl * ue
 
+                uu = np.linalg.norm(du)
+                print("||du||: ", uu)
+
+                # scale back increment
+
+                sf = min(aa / uu, 1.0)
+
+                lbd[step + 1] = lbd[step] + sf * (lbd[step + 1] - lbd[step])
+                du *= sf
+
+                uu = np.linalg.norm(du)
+                print("||du||: ", uu)
+
                 # update stresses and loads
 
                 qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-                update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new, sig_test,
-                                   qin, Et_E)
+                update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, du, sig_old,
+                                   sig_new, sig_test, qin, Et_E, LD, pgp)
 
+                # print('disp_old[dof_max]: {0: >10.2e}'.format(disp_old[dof_max]))
                 # calculate out of balance error
                 r = fixdof * (lbd[step + 1] * glv - qin)
                 rnorm = np.linalg.norm(r)
-                error = rnorm / qnorm
+                error = rnorm / qnorm  # / max(abs(lbd[step + 1]), 0.1)
 
                 prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
 
                 if iterat > iterat_max:
+                    print("RESTART")
                     # scale down
-                    if restart == 4:
+                    if restart > 3:
                         print("MAXIMUM RESTARTS REACHED")
-                        fail = True
-                        return disp_new, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+                        fail = False
+                        # # EXPERIMENTAL
+                        # break
+                        # # END EXPERIMENTAL
+                        step -= 1
+                        lbd = lbd[:-1]  # remove the last element of lbd
+                        mrr = True
+                        # return disp_new, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
                     restart += 1
-                    if step > 0:
+                    if step > 0 and not mrr:
                         dl = (lbd[step] - lbd[step - 1]) / scale_re / restart
                         du = (disp_new - disp_old) / scale_re / restart
-                    else:
+                        # if LD and lbd[-1] > eigenval[0]:
+                        #     a = (lbd[-1] - eigenval[0]) * eigenvec[:, 0] + max((lbd[-1] - eigenval[1]), 0.0) * eigenvec[:, 1]
+                        #     a *= np.linalg.norm(du) / np.linalg.norm(a)
+                        #     print("\nCHANGE OF RIKS VECTOR\n")
+                    elif not mrr:
                         # for first step only
                         dl = dl0 / scale_re / restart
                         du = dl * ue / scale_re / restart
                     lbd[step + 1] = lbd[step] + dl
 
-                    qin = np.zeros(3 * len(nocoord), dtype=np.float64)
-                    update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig_old, sig_new,
-                                       sig_test, qin, Et_E)
-                    r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
-                    rnorm = np.linalg.norm(r)
-                    error = rnorm / qnorm
+                    if not mrr:
+                        qin = np.zeros(3 * len(nocoord), dtype=np.float64)
+                        update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, du,
+                                           sig_old, sig_new, sig_test, qin, Et_E, LD, pgp)
+                        r = fixdof * (lbd[step + 1] * (glv + modf) - qin)
+                        rnorm = np.linalg.norm(r)
+                        error = rnorm / qnorm  # / max(abs(lbd[step + 1]), 0.1)
 
-                    iterat = 0
+                        iterat = 0
 
             # if abs(lbd[step + 1]) > abs(target_LF) and iRiks:
             if abs(target_LF - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
                 print("REACHED TARGET LOAD")
-                iRiks = False
-                dl = target_LF - lbd[step]
-                du = dl / (lbd[step + 1] - lbd[step]) * du
+                # disp_new += du
+                # un.append(np.max(disp_new[np.argmax(np.abs(disp_new))]))
+                # update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
+                #                 triax,
+                #                 pressure, sigmises, ecr, Et_E)
+                # maxloc = np.argmax(csr)
+                # csrplot.append(np.max(csr))
+                # crip.append(maxloc)
+                # pplot.append(pressure[maxloc])
+                # svmplot.append(sigmises[maxloc])
+                # triaxplot.append(triax[maxloc])
+                # ecrplot.append(ecr[maxloc])
+                # peeqplot.append(peeq[maxloc])
+                # peeqmax.append(np.max(peeq))
+                # break
+                # iRiks = False
+                # dl = target_LF - lbd[step]
+                # du = dl / (lbd[step + 1] - lbd[step]) * du
+
+                # EXPERIMENTAL
+                du = (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * du
+                lbd[step + 1] = target_LF
+                disp_new += du
+                disp_new_node = np.array(
+                    [disp_new[3 * i] ** 2 + disp_new[3 * i + 1] ** 2 + disp_new[3 * i + 2] ** 2 for i in
+                     range((ndof - 1) // 3)])
+                un.append(np.sqrt(max(disp_new_node)))
+                update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
+                                triax,
+                                pressure, sigmises, ecr, Et_E)
+                maxloc = np.argmax(csr)
+                csrplot.append(np.max(csr))
+                crip.append(maxloc)
+                pplot.append(pressure[maxloc])
+                svmplot.append(sigmises[maxloc])
+                triaxplot.append(triax[maxloc])
+                ecrplot.append(ecr[maxloc])
+                peeqplot.append(peeq[maxloc])
+                peeqmax.append(np.max(peeq))
+                break
+                # END EXPERIMENTAL
+
                 step -= 1
                 pstep -= 1
 
-            else:
+
+
+            elif not mrr:
                 # update results at end of converged load step
+                # print('disp_old[dof_max]: {0: >10.2e}'.format(disp_old[dof_max]))
+
                 pr_u(int(100 * (pstep + 1) / nstep))
                 LF_u(str(round(lbd[step + 1], 3)))
                 disp_old = disp_new.copy()
@@ -1056,7 +1594,13 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     du *= scale_up
 
                 # un.append(np.max(np.abs(disp_new)))
-                un.append(disp_new[dof_max])
+                print("max disp: ", np.max(np.abs(disp_new)), " at DOF: ", np.argmax(np.abs(disp_new)))
+                print("disp[dof_max]: ", disp_new[dof_max], " at DOF: ", dof_max)
+                # un.append(disp_new[dof_max])
+                disp_new_node = np.array(
+                    [disp_new[3 * i] ** 2 + disp_new[3 * i + 1] ** 2 + disp_new[3 * i + 2] ** 2 for i in
+                     range((ndof - 1) // 3)])
+                un.append(np.sqrt(max(disp_new_node)))
                 update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ultimate_strain, peeq, csr,
                                 triax,
                                 pressure, sigmises, ecr, Et_E)
@@ -1128,7 +1672,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             else:
                 ul_limit = 0
 
-        averaged = fcVM_window.averagedChk.isChecked()
+        # averaged = fcVM_window.averagedChk.isChecked()
+        averaged = False
         cnt, dl, du, target_LF = plot(fcVM_window, averaged, el_limit, ul_limit, un, lout, csrplot, peeqmax, dl, du,
                                       target_LF,
                                       nstep, ue, ultimate_strain, disp_new, disp_old, elNodes, nocoord, sig_new, peeq,
@@ -1149,9 +1694,9 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                                                                                 u_out))
 
     if disp_output == "total":
-        return disp_new, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new, disp_el, eigenval, eigenvec, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail, nocoord_old
     else:
-        return disp_new - disp_old, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail
+        return disp_new - disp_old, disp_el, eigenval, eigenvec, sig_new, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail, nocoord_old
 
 
 # plot the load-deflection curve
@@ -1507,7 +2052,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
             p.show(cpos=[1.0, 1.0, 1.0])
 
-    print(len(un), len(lbd))
+    print("displacement results: ", len(un), "load factor results: ", len(lbd))
     callback = Index(averaged, disp_new,
                      disp_old, elNodes, nocoord, sig_new, peeq,
                      sigmises, csr, noce, sig_yield)
@@ -1525,7 +2070,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
     fig.canvas.manager.set_window_title('fcVM')
     plt.subplots_adjust(bottom=0.2)
     ax[0].plot(un, lbd, '-ok')
-    ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-] or load [N]', title='')
+    ax[0].set(xlabel='displacement [mm]', ylabel='load factor [-]', title='')
     if fcVM.csrRbtn.isChecked():
         ax[1].set(xlabel='critical strain ratio [-]', title='')
         ax[1].plot(csrplot, lbd, '-ok')
@@ -1657,12 +2202,354 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
             csr[ipos1] += DL / critical_strain
 
 
+# convective stress update
+@jit(nopython=True, cache=True, fastmath=True)
+def convection(xlv, u, du, sig0, sigc, deps, dshp0, dshp1, dshp2, dmat):
+    dshp = np.empty((10, 3), dtype=np.float64)  # xi, eta, zeta - derivative of the shape functions
+    u10 = np.empty((10, 3), dtype=np.float64)  # xi, eta, zeta - derivative of the shape functions
+    du10 = np.empty((10, 3), dtype=np.float64)  # xi, eta, zeta - derivative of the shape functions
+
+    for i in range(10):
+        n3 = 3 * i
+        u10[i] = u[n3:n3 + 3]
+        du10[i] = du[n3:n3 + 3]
+        # print("node, x0 , du: ", i, xlv[i], du10[i])
+    dshp[:, 0] = dshp0
+    dshp[:, 1] = dshp1
+    dshp[:, 2] = dshp2
+
+    # print("xlv")
+    # print(xlv)
+    #
+    # print("du10")
+    # print(du10)
+
+    # print("1. sig0: ", sig0)
+
+    sxx = sig0[0]
+    syy = sig0[1]
+    szz = sig0[2]
+    sxy = sig0[3]
+    szx = sig0[4]
+    syz = sig0[5]
+
+    sig = np.array([[sxx, sxy, szx],
+                    [sxy, syy, syz],
+                    [szx, syz, szz]])
+
+    # local derivative of the global coordinates dx_j/dxi_m = dN_l/dxi_m * x0_jl (equation 7)
+    xs = np.dot(xlv.T, dshp)
+
+    # global derivative of the local coordinates dxi_m/dx_j = (dN_l/dxi_m * x0_jl)^(-1) (equation 7)
+    xs_inv = np.linalg.inv(xs)
+
+    # global derivatives of the shape functions (equation 6)
+    dshpg = np.dot(dshp, xs_inv)
+
+    # deformation gradient (equation 6)
+    F = np.eye(3, 3, dtype=np.float64) + np.dot(du10.T, dshpg)  # deformation gradient
+
+    # print("2. F: ")
+    # for row in F:
+    #     print(row)
+
+    # rho_1 / rho_0 (equation 3)
+    rr = 1.0 / np.linalg.det(F)
+
+    # eps = 0.5 * (np.dot(F.T, F) - np.eye(3, 3, dtype=np.float64))
+    # deps[0] = eps[0, 0]
+    # deps[1] = eps[1, 1]
+    # deps[2] = eps[2, 2]
+    # deps[3] = 2.0 * eps[0, 1]
+    # deps[4] = 2.0 * eps[0, 2]
+    # deps[5] = 2.0 * eps[1, 2]
+
+    dsigPK2 = np.dot(dmat, deps)
+
+    PK2xx = dsigPK2[0]
+    PK2yy = dsigPK2[1]
+    PK2zz = dsigPK2[2]
+    PK2xy = dsigPK2[3]
+    PK2zx = dsigPK2[4]
+    PK2yz = dsigPK2[5]
+
+    dPK2 = np.array([[PK2xx, PK2xy, PK2zx],
+                     [PK2xy, PK2yy, PK2yz],
+                     [PK2zx, PK2yz, PK2zz]])
+
+    # stress update (equation 2)
+    sig = rr * np.dot(F, np.dot(sig, F.T))
+    # sig = rr * np.dot(F, np.dot(sig+dPK2, F.T))
+
+    sigc[0] = sig[0, 0]
+    sigc[1] = sig[1, 1]
+    sigc[2] = sig[2, 2]
+    sigc[3] = sig[0, 1]
+    sigc[4] = sig[0, 2]
+    sigc[5] = sig[1, 2]
+
+    # print("3. sigc: ", sigc)
+
+    # print("dshp:", dshp)
+    # print("dshpg.T:", dshpg.T)
+    # print("du10:", du10)
+
+    return F
+
+
 # update stresses and loads
+@jit(nopython=True, cache=True, fastmath=True)
+def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, du, sig, sig_update,
+                       sig_test_global, qin, Et_E, LD, pgp):
+    du10 = np.empty(30, dtype=np.float64)  # displacement increments for the 10 tetrahedral nodes
+    u10 = np.empty(30, dtype=np.float64)  # displacement increments for the 10 tetrahedral nodes
+    xlv = np.empty((10, 3), dtype=np.float64)
+    sig_test = np.empty(6, dtype=np.float64)
+    sigc = np.empty(6, dtype=np.float64)
+    bm0 = np.empty(10, dtype=np.float64)
+    bm1 = np.empty(10, dtype=np.float64)
+    bm2 = np.empty(10, dtype=np.float64)
+    bm3 = np.empty(10, dtype=np.float64)
+    bm4 = np.empty(10, dtype=np.float64)
+    bm5 = np.empty(10, dtype=np.float64)
+    bm6 = np.empty(10, dtype=np.float64)
+    bm7 = np.empty(10, dtype=np.float64)
+    bm8 = np.empty(10, dtype=np.float64)
+    dmat = np.zeros((6, 6), dtype=np.float64)
+    xlv0 = np.empty(10, dtype=np.float64)
+    xlv1 = np.empty(10, dtype=np.float64)
+    xlv2 = np.empty(10, dtype=np.float64)
+    dshp0 = np.empty(10, dtype=np.float64)
+    dshp1 = np.empty(10, dtype=np.float64)
+    dshp2 = np.empty(10, dtype=np.float64)
+    dshpg0 = np.empty(10, dtype=np.float64)
+    dshpg1 = np.empty(10, dtype=np.float64)
+    dshpg2 = np.empty(10, dtype=np.float64)
+
+    hooke(0, materialbyElement, dmat)  # local material stiffness matrix
+
+    E = materialbyElement[0][0]  # Young's Modulus
+    nu = materialbyElement[0][1]  # Poisson's Ratio
+    G = E / 2.0 / (1 + nu)  # shear modulus
+    if Et_E > 0.95: Et_E = 0.95
+    Et = Et_E * E
+    H = Et / (1.0 - Et_E)
+
+    co_test = np.array([0.0, 0.0, 10.0])
+    done = False
+
+    for el, nodes in enumerate(elNodes):
+        elpos = 24 * el  # 4 integration points with 6 stress components each
+        elv = np.zeros(30, dtype=np.float64)  # element load vector, 10 nodes with 3 load components each
+
+        for index, nd in enumerate(nodes):
+            n3 = 3 * (nd - 1)
+            i3 = 3 * index
+            du10[i3] = du[n3]
+            du10[i3 + 1] = du[n3 + 1]
+            du10[i3 + 2] = du[n3 + 2]
+            u10[i3] = disp_new[n3]
+            u10[i3 + 1] = disp_new[n3 + 1]
+            u10[i3 + 2] = disp_new[n3 + 2]
+
+        for index, nd in enumerate(nodes):
+            i3 = 3 * index
+            co = nocoord[nd - 1]
+            if LD:
+                xlv0[index] = co[0] + u10[i3]
+                xlv1[index] = co[1] + u10[i3 + 1]
+                xlv2[index] = co[2] + u10[i3 + 2]
+                xlv[index] = co + u10[i3:i3 + 3] #+ du10[i3:i3 + 3]
+                # if np.array_equal(co, co_test) and not done:
+                #     print("xlv: ", xlv[index])
+                #     print("u: ", u10[i3:i3 + 3])
+                #     print("du: ", du10[i3:i3 + 3])
+                #     done = True
+            else:
+                xlv0[index] = co[0]
+                xlv1[index] = co[1]
+                xlv2[index] = co[2]
+                xlv[index] = co
+
+        for i in range(4):
+
+            ipp = 4 * el + i
+            sy = sig_yield[ipp]
+            ip = gp10[i]
+            ippos = elpos + 6 * i
+
+            # ------------------------------------------------------------------------------------------------------------
+            xi = ip[0]
+            et = ip[1]
+            ze = ip[2]
+
+            # local derivatives of the shape functions: xi-derivative - source: Calculix, G Dhondt
+            dshp0[0] = 1.0 - 4.0 * (1.0 - xi - et - ze)
+            dshp0[1] = 4.0 * xi - 1.0
+            dshp0[2] = 0.0
+            dshp0[3] = 0.0
+            dshp0[4] = 4.0 * (1.0 - 2.0 * xi - et - ze)
+            dshp0[5] = 4.0 * et
+            dshp0[6] = -4.0 * et
+            dshp0[7] = -4.0 * ze
+            dshp0[8] = 4.0 * ze
+            dshp0[9] = 0.0
+
+            # local derivatives of the shape functions: eta-derivative - source: Calculix, G Dhondt
+            dshp1[0] = 1.0 - 4.0 * (1.0 - xi - et - ze)
+            dshp1[1] = 0.0
+            dshp1[2] = 4.0 * et - 1.0
+            dshp1[3] = 0.0
+            dshp1[4] = -4.0 * xi
+            dshp1[5] = 4.0 * xi
+            dshp1[6] = 4.0 * (1.0 - xi - 2.0 * et - ze)
+            dshp1[7] = -4.0 * ze
+            dshp1[8] = 0.0
+            dshp1[9] = 4.0 * ze
+
+            # local derivatives of the shape functions: zeta-derivative - source: Calculix, G Dhondt
+            dshp2[0] = 1.0 - 4.0 * (1.0 - xi - et - ze)
+            dshp2[1] = 0.0
+            dshp2[2] = 0.0
+            dshp2[3] = 4.0 * ze - 1.0
+            dshp2[4] = -4.0 * xi
+            dshp2[5] = 0.0
+            dshp2[6] = -4.0 * et
+            dshp2[7] = 4.0 * (1.0 - xi - et - 2.0 * ze)
+            dshp2[8] = 4.0 * xi
+            dshp2[9] = 4.0 * et
+
+            # local derivative of the global coordinates
+            xs00 = xs01 = xs02 = xs10 = xs11 = xs12 = xs20 = xs21 = xs22 = 0.0
+            for kb in range(10):
+                xlv0kb = xlv0[kb]
+                xlv1kb = xlv1[kb]
+                xlv2kb = xlv2[kb]
+                dshp0kb = dshp0[kb]
+                dshp1kb = dshp1[kb]
+                dshp2kb = dshp2[kb]
+                xs00 += xlv0kb * dshp0kb
+                xs01 += xlv0kb * dshp1kb
+                xs02 += xlv0kb * dshp2kb
+                xs10 += xlv1kb * dshp0kb
+                xs11 += xlv1kb * dshp1kb
+                xs12 += xlv1kb * dshp2kb
+                xs20 += xlv2kb * dshp0kb
+                xs21 += xlv2kb * dshp1kb
+                xs22 += xlv2kb * dshp2kb
+
+            # Jacobian
+            xsj = (xs00 * xs11 * xs22 -
+                   xs00 * xs12 * xs21 +
+                   xs02 * xs10 * xs21 -
+                   xs02 * xs11 * xs20 +
+                   xs01 * xs12 * xs20 -
+                   xs01 * xs10 * xs22)
+            # global derivative of the local coordinates
+            xsi00 = (xs11 * xs22 - xs21 * xs12) / xsj
+            xsi01 = (xs02 * xs21 - xs01 * xs22) / xsj
+            xsi02 = (xs01 * xs12 - xs02 * xs11) / xsj
+            xsi10 = (xs12 * xs20 - xs10 * xs22) / xsj
+            xsi11 = (xs00 * xs22 - xs02 * xs20) / xsj
+            xsi12 = (xs10 * xs02 - xs00 * xs12) / xsj
+            xsi20 = (xs10 * xs21 - xs20 * xs11) / xsj
+            xsi21 = (xs20 * xs01 - xs00 * xs21) / xsj
+            xsi22 = (xs00 * xs11 - xs10 * xs01) / xsj
+
+            # global derivatives of the shape functions
+            for jb in range(10):
+                dshpg0[jb] = xsi00 * dshp0[jb] + xsi10 * dshp1[jb] + xsi20 * dshp2[jb]
+                dshpg1[jb] = xsi01 * dshp0[jb] + xsi11 * dshp1[jb] + xsi21 * dshp2[jb]
+                dshpg2[jb] = xsi02 * dshp0[jb] + xsi12 * dshp1[jb] + xsi22 * dshp2[jb]
+
+            # strain interpolation matrix bm1 .. bm8
+            for ib in range(10):
+                d00 = dshpg0[ib]
+                d10 = dshpg1[ib]
+                d20 = dshpg2[ib]
+                bm0[ib] = d00
+                bm1[ib] = d10
+                bm2[ib] = d20
+                bm3[ib] = d10
+                bm4[ib] = d00
+                bm5[ib] = d20
+                bm6[ib] = d00
+                bm7[ib] = d20
+                bm8[ib] = d10
+
+            # ------------------------------------------------------------------------------------------
+
+            # strain
+            deps = np.zeros(6, dtype=np.float64)
+            for j in range(10):
+                j3 = 3 * j
+                deps[0] += bm0[j] * du10[j3]
+                deps[1] += bm1[j] * du10[j3 + 1]
+                deps[2] += bm2[j] * du10[j3 + 2]
+                deps[3] += bm3[j] * du10[j3] + bm4[j] * du10[j3 + 1]
+                deps[4] += bm5[j] * du10[j3] + bm6[j] * du10[j3 + 2]
+                deps[5] += bm7[j] * du10[j3 + 1] + bm8[j] * du10[j3 + 2]
+
+            if LD:
+                F = convection(xlv, u10, du10, sig[ippos:ippos + 6], sigc, deps, dshp0, dshp1, dshp2, dmat)
+            else:
+                sigc = sig[ippos:ippos + 6]
+
+            # sigc = sig[ippos:ippos + 6]
+            # print("sigc: ", sigc)
+            # print("deps: ", deps)
+
+            # elastic test stress
+            for j in range(6):
+                tmp = sigc[j]
+                for k in range(6):
+                    tmp += dmat[j, k] * deps[k]
+                # if j==2:
+                # print("tmp: ", tmp)
+                sig_test[j] = tmp
+
+            sig_test_global[ippos:ippos + 6] = sig_test
+            # return elastic stress to von Mises yield surface
+            sxx, syy, szz, sxy, szx, syz, pp = vmises_original_optimised(sig_test, sy, H, G)
+            # sxx, syy, szz, sxy, szx, syz, pp = vmises_original_optimised(sigc, sy, H, G)
+            sig_update[ippos:ippos + 6] = sxx, syy, szz, sxy, szx, syz
+            pgp[ipp] = pp
+            # print(sxx, syy, szz, sxy, syz, szx)
+            # calculate element load vectors
+            ipxsj = ip[3] * abs(xsj)
+            for j in range(10):
+                j3 = 3 * j
+                elv[j3] += (bm0[j] * sxx + bm3[j] * sxy + bm5[j] * szx) * ipxsj
+                elv[j3 + 1] += (bm1[j] * syy + bm4[j] * sxy + bm7[j] * syz) * ipxsj
+                elv[j3 + 2] += (bm2[j] * szz + bm6[j] * szx + bm8[j] * syz) * ipxsj
+
+        # add element load vectors to the global load vector
+        for i in range(10):
+            iglob = nodes[i] - 1
+            iglob3 = 3 * iglob
+            i3 = 3 * i
+            for k in range(3):
+                qin[iglob3 + k] += elv[i3 + k]
+
+    # print("deps: ", deps)
+    # print("sig0: ", sig[-6:])
+    # print("F: ")
+    # for row in F:
+    #     print(row)
+    # print("sigc: ", sigc)
+    # print("sig_test: ", sig_test)
+    # print("sxx,syy,szz,sxy,szx,syz: ", sxx, syy, szz, sxy, szx, syz)
+
+    # if np.any(pgp): print("plastic points in update_stress_load")
+
+    return
+
 
 @jit(nopython=True, cache=True, fastmath=True)
-def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du, sig, sig_update, sig_test_global, qin,
-                       Et_E):
-    u10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes
+def update_stress_load_old(gp10, elNodes, nocoord, materialbyElement, sig_yield, disp_new, du, sig, sig_update,
+                           sig_test_global, qin,
+                           Et_E, LD):
+    du10 = np.empty(30, dtype=np.float64)  # displacements for the 10 tetrahedral nodes
     sig_test = np.empty(6, dtype=np.float64)
     bm0 = np.empty(10, dtype=np.float64)
     bm1 = np.empty(10, dtype=np.float64)
@@ -1706,9 +2593,9 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
         for index, nd in enumerate(nodes):
             n3 = 3 * (nd - 1)
             i3 = 3 * index
-            u10[i3] = du[n3]
-            u10[i3 + 1] = du[n3 + 1]
-            u10[i3 + 2] = du[n3 + 2]
+            du10[i3] = du[n3]
+            du10[i3 + 1] = du[n3 + 1]
+            du10[i3 + 2] = du[n3 + 2]
         for i in range(4):
 
             sy = sig_yield[4 * el + i]
@@ -1821,12 +2708,12 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
             eps = np.zeros(6, dtype=np.float64)
             for j in range(10):
                 j3 = 3 * j
-                eps[0] += bm0[j] * u10[j3]
-                eps[1] += bm1[j] * u10[j3 + 1]
-                eps[2] += bm2[j] * u10[j3 + 2]
-                eps[3] += bm3[j] * u10[j3] + bm4[j] * u10[j3 + 1]
-                eps[4] += bm5[j] * u10[j3] + bm6[j] * u10[j3 + 2]
-                eps[5] += bm7[j] * u10[j3 + 1] + bm8[j] * u10[j3 + 2]
+                eps[0] += bm0[j] * du10[j3]
+                eps[1] += bm1[j] * du10[j3 + 1]
+                eps[2] += bm2[j] * du10[j3 + 2]
+                eps[3] += bm3[j] * du10[j3] + bm4[j] * du10[j3 + 1]
+                eps[4] += bm5[j] * du10[j3] + bm6[j] * du10[j3 + 2]
+                eps[5] += bm7[j] * du10[j3 + 1] + bm8[j] * du10[j3 + 2]
 
             # elastic test stress
             for j in range(6):
@@ -1859,7 +2746,8 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, du,
     return
 
 
-@jit("types.UniTuple(float64, 6)(float64[::1], float64, float64, float64)", nopython=True, cache=True)
+# @jit("types.UniTuple(float64, 6)(float64[::1], float64, float64, float64)", nopython=True, cache=True)
+@jit(nopython=True, cache=True)
 def vmises_original_optimised(sig_test, sig_yield, H, G):
     st0, st1, st2, st3, st4, st5 = sig_test
     p = (st0 + st1 + st2) / 3.0
@@ -1871,8 +2759,10 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
 
     if sig_yield > sig_mises:
         fac = 1.0
+        pp = False  # elastic Gauss point
     else:
         fac = (1.0 - (1.0 - sig_yield / sig_mises) * 3.0 * G / (H + 3 * G))
+        pp = True  # plastic Gauss point
 
     st0 = fac * st0 + p
     st1 = fac * st1 + p
@@ -1881,9 +2771,9 @@ def vmises_original_optimised(sig_test, sig_yield, H, G):
     st4 = fac * st4
     st5 = fac * st5
 
-    sig_update = st0, st1, st2, st3, st4, st5
+    # sig_update = st0, st1, st2, st3, st4, st5
 
-    return sig_update
+    return st0, st1, st2, st3, st4, st5, pp
 
 
 # map stresses to nodes
@@ -1949,35 +2839,66 @@ def mapStresses(averaged, elNodes, nocoord, sig, peeq, sigvm, csr, noce, sig_yie
 
 
 # fill resultobject with results
-def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm):
+def pasteResults(gnl, doc, elNodes, nocoord, nocoord_old, dis, disp_el, eigenval, eigenvec, tet10stress, tet10peeq,
+                 tet10csr, tet10svm, maxImp):
+    maxImp = float(maxImp)
     return_code = 0
     for obj in doc.Objects:
         if obj.Name[:8] == "Analysis":
             analysis = doc.getObject(obj.Name)
 
+    if gnl == "GNLY" and maxImp != 0.0:
+        evec1 = eigenvec[:, 0] / np.max(np.abs(eigenvec[:, 0]))
+        evec2 = eigenvec[:, 1] / np.max(np.abs(eigenvec[:, 1]))
+
     # analysis = doc.getObject("Analysis")
 
     nn = len(nocoord)  # number of nodes
 
-    resVol = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
-
-    # VOLUME MESH START
     elements_tetra10 = {}
     mode_results_vol = {}
+    mode_results_vol2 = {}
+    mode_results_vol3 = {}
+    mode_results_vol4 = {}
 
     nodes = range(1, nn + 1)
     coordinates = map(App.Vector, nocoord)
-    displacements = map(App.Vector, np.array_split(dis, nn))
+    coordinates_old = map(App.Vector, nocoord_old)
     volnodes = dict(zip(nodes, coordinates))
+    volnodes_old = dict(zip(nodes, coordinates_old))
+
+    resVol = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
+    resVol.Label = "ElasticPlasticDisplacementResults"
+    displacements = map(App.Vector, np.array_split(dis, nn))
     mode_disp_vol = dict(zip(nodes, displacements))
+    mode_results_vol['disp'] = mode_disp_vol
+    results = [mode_results_vol]
+
+    resVol2 = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
+    resVol2.Label = "ElasticDisplacementResults"
+    displacements2 = map(App.Vector, np.array_split(disp_el, nn))
+    mode_disp_vol2 = dict(zip(nodes, displacements2))
+    mode_results_vol2['disp'] = mode_disp_vol2
+    results2 = [mode_results_vol2]
+
+    if gnl == "GNLY" and maxImp != 0.0 :
+        resVol3 = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
+        resVol3.Label = "ElasticBucklingShape_lambda=" + str(round(eigenval[0], 2))
+        displacements3 = map(App.Vector, np.array_split(evec1, nn))
+        mode_disp_vol3 = dict(zip(nodes, displacements3))
+        mode_results_vol3['disp'] = mode_disp_vol3
+        results3 = [mode_results_vol2]
+
+        resVol4 = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
+        resVol4.Label = "ElasticBucklingShape_lambda=" + str(round(eigenval[1], 2))
+        displacements4 = map(App.Vector, np.array_split(evec2, nn))
+        mode_disp_vol4 = dict(zip(nodes, displacements4))
+        mode_results_vol4['disp'] = mode_disp_vol4
+        results4 = [mode_results_vol2]
 
     for index, elem in enumerate(elNodes):
         elements_tetra10[index + 1] = (
             elem[0], elem[2], elem[1], elem[3], elem[6], elem[5], elem[4], elem[7], elem[9], elem[8])
-
-    mode_results_vol['disp'] = mode_disp_vol
-
-    results = [mode_results_vol]
 
     mvol = {
         'Nodes': volnodes,
@@ -1996,10 +2917,76 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, t
         'Results': results
     }
 
+    mvol2 = {
+        'Nodes': volnodes,
+        'Seg2Elem': {},
+        'Seg3Elem': {},
+        'Tria3Elem': {},
+        'Tria6Elem': {},
+        'Quad4Elem': {},
+        'Quad8Elem': {},
+        'Tetra4Elem': {},
+        'Tetra10Elem': elements_tetra10,
+        'Hexa8Elem': {},
+        'Hexa20Elem': {},
+        'Penta6Elem': {},
+        'Penta15Elem': {},
+        'Results': results2
+    }
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        mvol3 = {
+            'Nodes': volnodes_old,
+            'Seg2Elem': {},
+            'Seg3Elem': {},
+            'Tria3Elem': {},
+            'Tria6Elem': {},
+            'Quad4Elem': {},
+            'Quad8Elem': {},
+            'Tetra4Elem': {},
+            'Tetra10Elem': elements_tetra10,
+            'Hexa8Elem': {},
+            'Hexa20Elem': {},
+            'Penta6Elem': {},
+            'Penta15Elem': {},
+            'Results': results3
+        }
+
+        mvol4 = {
+            'Nodes': volnodes_old,
+            'Seg2Elem': {},
+            'Seg3Elem': {},
+            'Tria3Elem': {},
+            'Tria6Elem': {},
+            'Quad4Elem': {},
+            'Quad8Elem': {},
+            'Tetra4Elem': {},
+            'Tetra10Elem': elements_tetra10,
+            'Hexa8Elem': {},
+            'Hexa20Elem': {},
+            'Penta6Elem': {},
+            'Penta15Elem': {},
+            'Results': results4
+        }
+
     meshvol = itf.make_femmesh(mvol)
+    meshvol2 = itf.make_femmesh(mvol2)
+    if gnl == "GNLY" and maxImp != 0.0:
+        meshvol3 = itf.make_femmesh(mvol3)
+        meshvol4 = itf.make_femmesh(mvol4)
 
     result_mesh_object_1 = ObjectsFem.makeMeshResult(doc, 'Result_Mesh_Volume')
     result_mesh_object_1.FemMesh = meshvol
+
+    result_mesh_object_2 = ObjectsFem.makeMeshResult(doc, 'Result_Mesh_Volume')
+    result_mesh_object_2.FemMesh = meshvol2
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        result_mesh_object_3 = ObjectsFem.makeMeshResult(doc, 'Result_Mesh_Volume')
+        result_mesh_object_3.FemMesh = meshvol3
+
+        result_mesh_object_4 = ObjectsFem.makeMeshResult(doc, 'Result_Mesh_Volume')
+        result_mesh_object_4.FemMesh = meshvol4
 
     resVol.DisplacementVectors = [App.Vector(dis[3 * n], dis[3 * n + 1], dis[3 * n + 2]) for n in range(nn)]
     resVol.DisplacementLengths = [np.linalg.norm([dis[3 * n], dis[3 * n + 1], dis[3 * n + 2]]) for n in range(nn)]
@@ -2009,6 +2996,24 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, t
     resVol.NodeStressXY = tet10stress.T[3].T.tolist()
     resVol.NodeStressXZ = tet10stress.T[4].T.tolist()
     resVol.NodeStressYZ = tet10stress.T[5].T.tolist()
+
+    resVol2.DisplacementVectors = [App.Vector(disp_el[3 * n], disp_el[3 * n + 1], disp_el[3 * n + 2]) for n in
+                                   range(nn)]
+    resVol2.DisplacementLengths = [np.linalg.norm([disp_el[3 * n], disp_el[3 * n + 1], disp_el[3 * n + 2]]) for n in
+                                   range(nn)]
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        resVol3.DisplacementVectors = [
+            App.Vector(evec1[3 * n], evec1[3 * n + 1], evec1[3 * n + 2]) for n in
+            range(nn)]
+        resVol3.DisplacementLengths = [
+            np.linalg.norm([evec1[3 * n], evec1[3 * n + 1], evec1[3 * n + 2]]) for n in
+            range(nn)]
+        resVol4.DisplacementVectors = [
+            App.Vector(evec2[3 * n], evec2[3 * n + 1], evec2[3 * n + 2]) for n in range(nn)]
+        resVol4.DisplacementLengths = [
+            np.linalg.norm([evec2[3 * n], evec2[3 * n + 1], evec2[3 * n + 2]]) for n in
+            range(nn)]
 
     try:
         resVol.CriticalStrainRatio = tet10csr.T.tolist()  # FreeCAD 0.21.0 and higher - works for export to VTK
@@ -2035,23 +3040,73 @@ def pasteResults(doc, elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, t
                     0.0, 0.0,
                     0.0, 0.0]
 
+    resVol2.Stats = [min(disp_el[0::3]), max(disp_el[0::3]),
+                     min(disp_el[1::3]), max(disp_el[1::3]),
+                     min(disp_el[2::3]), max(disp_el[2::3]),
+                     min(resVol2.DisplacementLengths), max(resVol2.DisplacementLengths),
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0]
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        resVol3.Stats = [min(evec1[0::3]), max(evec1[0::3]),
+                         min(evec1[1::3]), max(evec1[1::3]),
+                         min(evec1[2::3]), max(evec1[2::3]),
+                         min(resVol3.DisplacementLengths), max(resVol3.DisplacementLengths),
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0]
+        resVol4.Stats = [min(evec2[0::3]), max(evec2[0::3]),
+                         min(evec2[1::3]), max(evec2[1::3]),
+                         min(evec2[2::3]), max(evec2[2::3]),
+                         min(resVol4.DisplacementLengths), max(resVol4.DisplacementLengths),
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0,
+                         0.0, 0.0]
+
     resVol.Mesh = result_mesh_object_1
     resVol.NodeNumbers = [int(key) for key in resVol.Mesh.FemMesh.Nodes.keys()]
 
+    resVol2.Mesh = result_mesh_object_2
+    resVol2.NodeNumbers = [int(key) for key in resVol2.Mesh.FemMesh.Nodes.keys()]
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        resVol3.Mesh = result_mesh_object_3
+        resVol3.NodeNumbers = [int(key) for key in resVol3.Mesh.FemMesh.Nodes.keys()]
+
+        resVol4.Mesh = result_mesh_object_4
+        resVol4.NodeNumbers = [int(key) for key in resVol4.Mesh.FemMesh.Nodes.keys()]
+
     resVol = itf.fill_femresult_mechanical(resVol, results)
+
+    itf.fill_femresult_mechanical(resVol2, results2)
+
+    if gnl == "GNLY" and maxImp != 0.0:
+        itf.fill_femresult_mechanical(resVol3, results3)
+        itf.fill_femresult_mechanical(resVol4, results4)
 
     # VOLUME MESH FINISH
 
-    # Add von Mises Stress and Plastic Strain Ratio to the results
-    # rt.add_von_mises(resVol)
-    # rt.add_principal_stress_std(resVol)
-    #
-    # rt.fill_femresult_stats(resVol)
-
     trm._TaskPanel.result_obj = resVol
     trm._TaskPanel.mesh_obj = meshvol
-
-    # print(dir(trm._TaskPanel))
 
     doc.recompute()
 
@@ -2131,23 +3186,36 @@ def calcSum(Edge_Elements, Face_Elements, mesh, CSR, peeq, svm):
     return edge_length, edge_peeq, edge_CSR, edge_svm, face_area, face_peeq, face_CSR, face_svm
 
 
-def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm, tet10triax, fy, file):
+def exportVTK(gnl, elNodes, nocoord, nocoord_old, dis, disp_el, eigenval, eigenvec, tet10stress, tet10peeq, tet10csr,
+              tet10svm, tet10triax, fy, file, maxImp):
+
+    maxImp = float(maxImp)
+
     padding = np.full(len(elNodes), 10, dtype=int)
     cells = np.vstack((padding, (elNodes - 1).T)).T
 
     celltypes = np.full(len(elNodes), fill_value=CellType.QUADRATIC_TETRA, dtype=np.uint8)
 
     grid = pv.UnstructuredGrid(cells, celltypes, nocoord)
+    grid_old = pv.UnstructuredGrid(cells, celltypes, nocoord)
     grid.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
     grid.point_data["Equivalent Plastic Strain\n"] = tet10peeq.flatten(order="F")
     grid.point_data["von Mises Stress\n"] = tet10svm.flatten(order="F")
     grid.point_data["Triaxiality\n"] = tet10triax.flatten(order="F")
 
     displacement = dis.reshape((len(nocoord), 3))
-
+    elastic_disp = disp_el.reshape((len(nocoord), 3))
     stress = tet10stress.reshape((len(nocoord), 6))
 
     grid.point_data['Displacement'] = displacement
+    if gnl == "GNLY" and maxImp != 0.0:
+        evec1 = eigenvec[:, 0] / np.max(np.abs(eigenvec[:, 0]))
+        evec2 = eigenvec[:, 1] / np.max(np.abs(eigenvec[:, 1]))
+        evec1 = evec1.reshape((len(nocoord), 3))
+        evec2 = evec2.reshape((len(nocoord), 3))
+        grid.point_data['Elastic Displacement'] = elastic_disp
+        grid.point_data['Buckling shape for lambda = ' + str(round(eigenval[0], 2))] = evec1
+        grid.point_data['Buckling shape for lambda = ' + str(round(eigenval[1], 2))] = evec2
 
     grid.point_data['Stress Tensor'] = stress
 
@@ -2162,9 +3230,9 @@ def exportVTK(elNodes, nocoord, dis, tet10stress, tet10peeq, tet10csr, tet10svm,
     grid.point_data['Intermediate Principal Stress Vector'] = sv2
     grid.point_data['Minor Principal Stress Vector'] = sv3
 
-    grid.point_data['Reinforcement Ratio x'] = tet10rho[:, 0].flatten(order="F")
-    grid.point_data['Reinforcement Ratio y'] = tet10rho[:, 1].flatten(order="F")
-    grid.point_data['Reinforcement Ratio z'] = tet10rho[:, 2].flatten(order="F")
+    # grid.point_data['Reinforcement Ratio x'] = tet10rho[:, 0].flatten(order="F")
+    # grid.point_data['Reinforcement Ratio y'] = tet10rho[:, 1].flatten(order="F")
+    # grid.point_data['Reinforcement Ratio z'] = tet10rho[:, 2].flatten(order="F")
 
     pv.save_meshio(file, grid)
 
