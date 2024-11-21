@@ -2,7 +2,7 @@
 0.0
 0.0
 0.0
-60
+1
 20
 1.0e-2
 1.2
@@ -15,3 +15,7 @@ incremental
 2.0
 CSR
 unaveraged
+GNLY
+1.0
+1.0
+0.0

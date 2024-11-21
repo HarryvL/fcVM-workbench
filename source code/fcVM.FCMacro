@@ -166,7 +166,7 @@ if return_code == 0:
         prn_upd("paste results in the FEM result object\n")
         t0 = time.time()
         resVol = ft.pasteResults(gnl, doc, elNodes, noCoord, nocoord_old, displacements, disp_el, eigenval, eigenvec, tet10stress,
-                                 tet10peeq, tet10csr, tet10svm, maxImp)
+                                 tet10peeq, tet10csr, tet10svm, maxImp, nstep)
         t1 = time.time()
         t[5] = t1 - t0
         prn_upd(f"paste results in the FEM result object - time taken:  {t1 - t0:7.3f}  seconds\n")
@@ -176,7 +176,7 @@ if return_code == 0:
         t0 = time.time()
         VTKfile = os.path.join(mdir, "output files", name + '.vtk')
         ft.exportVTK(gnl, elNodes, noCoord, nocoord_old, displacements, disp_el, eigenval, eigenvec, tet10stress, tet10peeq,
-                     tet10csr, tet10svm, tet10triax, sig_yield, VTKfile, maxImp)
+                     tet10csr, tet10svm, tet10triax, sig_yield, VTKfile, maxImp, nstep)
         t1 = time.time()
         t[6] = t1 - t0
         prn_upd(f"export results to VTK - time taken:  {t1 - t0:7.3f}  seconds\n")
