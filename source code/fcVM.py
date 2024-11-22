@@ -63,8 +63,6 @@ try:
 except FileNotFoundError:
     print("File fcVM.ini not found")
 
-# print("settings: ", settings)
-
 if settings["solver"] == 1:
     from sksparse.cholmod import cholesky
 elif settings["solver"] == 2:
@@ -300,7 +298,6 @@ def setUpInput(doc, mesh, analysis):
                         L += ref.Length
                     else:
                         A += ref.Area
-            # print("A: ", A)
 
             for part, boundaries in obj.References:
                 for boundary in boundaries:
@@ -464,10 +461,6 @@ def dshp10tet(xi, et, ze, xl, bmat):
         d00 = dshpg[0][i]
         d10 = dshpg[1][i]
         d20 = dshpg[2][i]
-        # if i==0:
-        #     print("d00: ", d00)
-        #     print("d10: ", d10)
-        #     print("d20: ", d20)
         bmat[0][i3] = d00
         bmat[1][i3 + 1] = d10
         bmat[2][i3 + 2] = d20
@@ -817,7 +810,7 @@ def calcGSM(elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, lo
     return stm, row, col, glv, modf, V, loadsumx, loadsumy, loadsumz, ne, nn, x
 
 
-# @jit(nopython=True, cache=True)
+@jit(nopython=True, cache=True)
 def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, grav_z, loadfaces, pressure,
             loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, disp_new, du, sig_old, pgp,
             Et_E):
@@ -831,7 +824,7 @@ def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, gra
     # linear buckling analysis - number of entries in the full stiffness matrix
     nslb = int(30 * 30 * ne)
 
-    print(f"update tangent stiffness matrix")
+    # print(f"update tangent stiffness matrix")
     xle = np.zeros((3, 3), dtype=np.float64)  # coordinates of load line nodes
     xlf = np.zeros((3, 6), dtype=np.float64)  # coordinates of load face nodes
     xlv = np.zeros((10, 3), dtype=np.float64)  # coordinates of volume element nodes
@@ -850,6 +843,7 @@ def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, gra
     modfg = np.zeros((3 * nn), dtype=np.float64)  # modification to the stiffness matrix for displacement BCs
     dof = np.zeros(30, dtype=np.int64)
     dmat = np.zeros((6, 6), dtype=np.float64)
+    pmat = np.zeros((6, 6), dtype=np.float64)
     bmatV = np.zeros((6, 30), dtype=np.float64)
     x = np.zeros((4 * ne, 3), dtype=np.float64)
 
@@ -946,8 +940,8 @@ def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, gra
 
     hooke(0, materialbyElement, dmat)
     density = materialbyElement[0][2]
-    E = materialbyElement[0][0]
-    nu = materialbyElement[0][1]
+    E = float(materialbyElement[0][0])
+    nu = float(materialbyElement[0][1])
     G = E / (1.0 + nu) / 2.0
     if Et_E > 0.95: Et_E = 0.95
     Et = Et_E * E
@@ -990,15 +984,19 @@ def calcTSM(nstep, elNodes, nocoord, materialbyElement, fix, grav_x, grav_y, gra
                               3.0 * (st3 ** 2 + st4 ** 2 + st5 ** 2))
                 s = np.array([st0, st1, st2, st3, st4, st5])
                 if svm == 0.0: svm = 1.0  # prevent division error in pmat
-                pmat = 3.0 * G * np.outer(s, s) / (1.0 + H / 3.0 / G) / svm ** 2
+
+                fac = 3.0 * G / (1.0 + H / 3.0 / G) / svm ** 2
+                for i1 in range(6):
+                    for i2 in range(6):
+                        pmat[i1][i2] = fac * s[i1] * s[i2]
                 esm += np.dot(bmatV.T, np.dot(dmat - pmat, bmatV)) * ip[3] * abs(xsj)
             else:
                 esm += np.dot(bmatV.T, np.dot(dmat, bmatV)) * ip[3] * abs(xsj)
 
             if float(nstep) == 1.0:
-                G = np.kron(dshpg, np.eye(3))
-                S = np.kron(sig, np.eye(3))
-                dnsm = np.dot(G.T, np.dot(S, G)) * ip[3] * abs(xsj)
+                GM = np.kron(dshpg, np.eye(3))
+                SM = np.kron(sig, np.eye(3))
+                dnsm = np.dot(GM.T, np.dot(SM, GM)) * ip[3] * abs(xsj)
                 nsm += dnsm
             gamma[0::3] += grav_x * density * shp * ip[3] * abs(xsj)
             gamma[1::3] += grav_y * density * shp * ip[3] * abs(xsj)
@@ -1231,7 +1229,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             imax = np.argmax(np.abs(ub))
             imper = maxImp / mb * np.sign(ub[imax]) * ub
 
-        print("maximum imperfection: ", np.max(imper))
+        # print("maximum imperfection: ", np.max(imper))
 
         nocoord += imper.reshape(-1, 3)
 
@@ -1291,6 +1289,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         lbd = np.zeros(1, dtype=np.float64)  # load level
 
     factor_time_tot = 0.0
+    factor_dec_tot = 0.0
     iterat_tot = 0
     mrr = False
     sig_new = np.zeros(24 * nelem, dtype=np.float64)  # stress in Tet10
@@ -1361,6 +1360,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                         elif settings["solver"] == 3:
                             sparse_cholesky = SparseCholesky(tsm)
 
+                        t2 = time.perf_counter()
+                        prn_upd("decompose tangent stiffness matrix: {:.2e} s".format((t2 - t1)))
+                        factor_dec_tot += t2 - t1
+
                     except:
                         print("singular stiffness matrix")
                         pass
@@ -1373,6 +1376,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     elif settings["solver"] == 3:
                         ue = sparse_cholesky.solve_A(fe)
 
+                    t3 = time.perf_counter()
+
+                    prn_upd("solve for ue: {:.2e} s".format((t3 - t2)))
+
                 f = relax * r
                 t0 = time.perf_counter()
                 if settings["solver"] == 1:
@@ -1384,6 +1391,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     due = sparse_cholesky.solve_A(f)
 
                 t1 = time.perf_counter()
+                prn_upd("solve for due: {:.2e} s".format((t1 - t0)))
 
                 factor_time_tot += t1 - t0
 
@@ -1392,7 +1400,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     dl = -np.dot(a, due) / np.dot(a, ue)
                     lbd[step + 1] += dl
                     aa = np.linalg.norm(a)
-                    print("||a||: ", aa)
+                    # print("||a||: ", aa)
                 else:
                     dl = 0.0
                     # du += due + dl * ue
@@ -1401,7 +1409,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 du += due + dl * ue
 
                 uu = np.linalg.norm(du)
-                print("||du1||: ", uu)
+                # print("||du1||: ", uu)
 
                 # scale back increment
 
@@ -1410,8 +1418,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 lbd[step + 1] = lbd[step] + sf * (lbd[step + 1] - lbd[step])
                 du *= sf
 
-                uu = np.linalg.norm(du)
-                print("||du2||: ", uu)
+                # uu = np.linalg.norm(du)
+                # print("||du2||: ", uu)
 
                 # update stresses and loads
 
@@ -1500,8 +1508,6 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     dl *= scale_up
                     du *= scale_up
 
-                print("max disp: ", np.max(np.abs(disp_new)), " at DOF: ", np.argmax(np.abs(disp_new)))
-                print("disp[dof_max]: ", disp_new[dof_max], " at DOF: ", dof_max)
                 disp_new_node = np.array(
                     [disp_new[3 * i] ** 2 + disp_new[3 * i + 1] ** 2 + disp_new[3 * i + 2] ** 2 for i in
                      range((ndof - 1) // 3)])
@@ -1583,6 +1589,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                                       nstep, ue, ultimate_strain, disp_new, disp_old, elNodes, nocoord, sig_new, peeq,
                                       sigmises, csr, noce, sig_yield_inp)
 
+    prn_upd("total time decomposing tangent stiffness matrix: {}".format(factor_dec_tot))
     prn_upd("total time evaluating K_inv * r: {}".format(factor_time_tot))
     prn_upd("total number of iterations: {}".format(iterat_tot))
     if iterat_tot != 0:
@@ -1628,11 +1635,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
         def add(self, event):
             self.cnt = True
             self.clicked = True
-            # print("self.LF: ", self.LF)
-            # print("self.target_LF: ", self.target_LF)
-            # print("self.target_LF_out: ", self.target_LF_out)
             cr1 = (self.target_LF - self.LF) * (self.target_LF_out - self.LF) <= 0.0
-            # print(cr1)
             if (cr1):
                 self.dl = np.sign(self.target_LF_out - self.LF) * 1.0 / self.nstep
                 self.du = self.dl * self.ue

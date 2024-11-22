@@ -24,7 +24,9 @@ import os
 import sys
 import time
 import math
+# import pstats
 import dummyVM
+# import cProfile
 import FreeCAD as App
 import FreeCADGui as Gui
 
@@ -144,6 +146,14 @@ if return_code == 0:
         error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,
         ultimate_strain, fcVM_window, Et_E, target_LF, x, noce, fix, grav_x, grav_y, grav_z, loadFaces, pressure,
         loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, gnl, maxImp, ev1, ev2)
+
+    # pr = cProfile.runctx('displacements, disp_el, eigenval, eigenvec, stresses, peeq, sigmises, csr, lout, un, crip, peeqplot, pplot, svmplot, triaxplot, ecrplot, csrplot, fail, nocoord_old = ft.calcDisp(\
+    #         elNodes, noCoord, fixdof, movdof, modf, elMat,\
+    #         stm, row, col, globalLoadVector, nstep, iterat_max,\
+    #         error_max, relax, scale_re, scale_up, scale_dn, sig_yield, disp_output,\
+    #         ultimate_strain, fcVM_window, Et_E, target_LF, x, noce, fix, grav_x, grav_y, grav_z, loadFaces, pressure,\
+    #         loadvertices, vertexloads, loadedges, edgeloads, loadfaces_uni, faceloads, gnl, maxImp, ev1, ev2)', globals(), locals(), filename="stats.prof")
+
 
     t1 = time.time()
     t[3] = t1 - t0
