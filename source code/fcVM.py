@@ -161,13 +161,13 @@ def setUpInput(doc, mesh, analysis):
     ppEl = {}  # BooleanFragment Primitive element El belongs to
     materialbyElement = []  # see further
 
-    prn_upd("Number of material objects: ", len(member.mats_linear))
+    # prn_upd("Number of material objects: ", len(member.mats_linear))
 
     for indm, matobject in enumerate(member.mats_linear):
         E = float(App.Units.Quantity(matobject['Object'].Material['YoungsModulus']).getValueAs('MPa'))
         Nu = float(matobject['Object'].Material['PoissonRatio'])
         Density = float(App.Units.Quantity(matobject['Object'].Material['Density']).getValueAs('kg/mm^3'))
-        prn_upd("Material Object: ", matobject['Object'].Name, "   E= ", E, "   Nu= ", Nu, "   Density= ", Density)
+        # prn_upd("Material Object: ", matobject['Object'].Name, "   E= ", E, "   Nu= ", Nu, "   Density= ", Density)
         for el in element_sets[indm]:  # element_sets[indm]: all elements with material indm
             if matCon: ppEl[el] = matCon[indm]  # ppEl[el]: primitive el belongs to
             materialbyElement.append([E, Nu, Density])  # materialbyElement[elementIndex] = [E, Nu, Density]
@@ -1104,7 +1104,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     t0 = time.perf_counter()
     gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
     t1 = time.perf_counter()
-    prn_upd("construct sparse global stiffness matrix: {:.2e} s".format((t1 - t0)))
+    # prn_upd("construct sparse global stiffness matrix: {:.2e} s".format((t1 - t0)))
 
     qnorm = np.linalg.norm(glv)
     if qnorm < 1.0: qnorm = 1.0
@@ -1131,7 +1131,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
     disp_el = ue.copy()
 
     t2 = time.perf_counter()
-    prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
+    # prn_upd("sparse Cholesky decomposition: {:.2e} s, elastic solution: {:.2e} s".format((t1 - t0), (t2 - t1)))
 
     # initiate analysis
     dl0 = 1.0 / nstep
@@ -1248,7 +1248,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         t0 = time.perf_counter()
         gsm = scsp.csc_matrix((stm, (row, col)), shape=(ndof, ndof))  # construct sparse global stiffness matrix
         t1 = time.perf_counter()
-        prn_upd("update sparse global stiffness matrix for imperfections: {:.2e} s".format((t1 - t0)))
+        # prn_upd("update sparse global stiffness matrix for imperfections: {:.2e} s".format((t1 - t0)))
         qnorm = np.linalg.norm(glv)
         if qnorm < 1.0: qnorm = 1.0
 
@@ -1274,8 +1274,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
         disp_el = ue.copy()
 
         t2 = time.perf_counter()
-        prn_upd("sparse Cholesky decomposition of update stiffness matrix: {:.2e} s, elastic solution: {:.2e} s".format(
-            (t1 - t0), (t2 - t1)))
+        # prn_upd("sparse Cholesky decomposition of update stiffness matrix: {:.2e} s, elastic solution: {:.2e} s".format(
+        #     (t1 - t0), (t2 - t1)))
 
         # initiate analysis
         dl0 = 1.0 / nstep  # nstep == 1 execute an elastic analysis
@@ -1323,6 +1323,12 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             fex = fixdof * lbd[step + 1] * glv
             fin = fixdof * qin
             r = fex - fin
+            # print("at start of step")
+            # print("fex: ", np.linalg.norm(fex))
+            # print("fin: ", np.linalg.norm(fin))
+            # print("r: ", np.linalg.norm(r))
+            # print("sig_max: ", np.max(sig_new))
+
             rnorm = np.linalg.norm(r)
 
             # out-of-balance error
@@ -1351,7 +1357,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     tsm = scsp.csc_matrix((stm, (row, col)),
                                           shape=(ndof, ndof))  # construct sparse global stiffness matrix
                     t1 = time.perf_counter()
-                    prn_upd("construct sparse tangent stiffness matrix: {:.2e} s".format((t1 - t0)))
+                    # prn_upd("construct sparse tangent stiffness matrix: {:.2e} s".format((t1 - t0)))
                     try:
                         if settings["solver"] == 1:
                             factor = cholesky(tsm)
@@ -1361,7 +1367,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                             sparse_cholesky = SparseCholesky(tsm)
 
                         t2 = time.perf_counter()
-                        prn_upd("decompose tangent stiffness matrix: {:.2e} s".format((t2 - t1)))
+                        # prn_upd("decompose tangent stiffness matrix: {:.2e} s".format((t2 - t1)))
                         factor_dec_tot += t2 - t1
 
                     except:
@@ -1378,7 +1384,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
                     t3 = time.perf_counter()
 
-                    prn_upd("solve for ue: {:.2e} s".format((t3 - t2)))
+                    # prn_upd("solve for ue: {:.2e} s".format((t3 - t2)))
+
+                    a = ue.copy()
+                    a *= np.linalg.norm(du) / np.linalg.norm(a)
 
                 f = relax * r
                 t0 = time.perf_counter()
@@ -1391,7 +1400,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                     due = sparse_cholesky.solve_A(f)
 
                 t1 = time.perf_counter()
-                prn_upd("solve for due: {:.2e} s".format((t1 - t0)))
+                # prn_upd("solve for due: {:.2e} s".format((t1 - t0)))
 
                 factor_time_tot += t1 - t0
 
@@ -1431,11 +1440,16 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 r = fixdof * (lbd[step + 1] * glv - qin)
                 rnorm = np.linalg.norm(r)
                 error = rnorm / qnorm
+                # print("at end of iteration")
+                # print("fex: ", np.linalg.norm(fixdof * lbd[step + 1] * glv))
+                # print("fin: ", np.linalg.norm(fixdof * qin))
+                # print("r: ", np.linalg.norm(r))
+                # print("sig_max: ", np.max(sig_new))
 
                 prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
 
                 if iterat > iterat_max:
-                    print("RESTART")
+                    print(f"RESTART # {restart+1}")
                     # scale down
                     if restart > 3:
                         print("MAXIMUM RESTARTS REACHED")
@@ -1498,6 +1512,11 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 dl = lbd[step + 1] - lbd[step]
                 if max(movdof) == 1:
                     rfl = np.append(rfl, np.sum(movdof * qin))
+
+                # TEST
+                # dl = 0.0
+                # du = np.zeros(ndof, dtype=np.float64)
+                # TEST
 
                 if iterat > 10:
                     # scale down
@@ -2213,9 +2232,9 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
             i3 = 3 * index
             co = nocoord[nd - 1]
             if LD:
-                xlv0[index] = co[0] + u10[i3]
-                xlv1[index] = co[1] + u10[i3 + 1]
-                xlv2[index] = co[2] + u10[i3 + 2]
+                xlv0[index] = co[0] + u10[i3] #+ du10[i3]
+                xlv1[index] = co[1] + u10[i3 + 1] #+ du10[i3 + 1]
+                xlv2[index] = co[2] + u10[i3 + 2] #+ du10[i3 + 2]
                 xlv[index] = co + u10[i3:i3 + 3]
             else:
                 xlv0[index] = co[0]
@@ -2314,6 +2333,44 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 dshpg1[jb] = xsi01 * dshp0[jb] + xsi11 * dshp1[jb] + xsi21 * dshp2[jb]
                 dshpg2[jb] = xsi02 * dshp0[jb] + xsi12 * dshp1[jb] + xsi22 * dshp2[jb]
 
+            # TEST
+            F = np.eye(3, dtype=np.float64)  # deformation gradient
+            for i in range(10):
+                F[0, 0] += du10x[i] * dshpg0[i]
+                F[0, 1] += du10x[i] * dshpg1[i]
+                F[0, 2] += du10x[i] * dshpg2[i]
+                F[1, 0] += du10y[i] * dshpg0[i]
+                F[1, 1] += du10y[i] * dshpg1[i]
+                F[1, 2] += du10y[i] * dshpg2[i]
+                F[2, 0] += du10z[i] * dshpg0[i]
+                F[2, 1] += du10z[i] * dshpg1[i]
+                F[2, 2] += du10z[i] * dshpg2[i]
+            rr = (F[0, 0] * F[1, 1] * F[2, 2] -
+                  F[0, 0] * F[1, 2] * F[2, 1] +
+                  F[0, 2] * F[1, 0] * F[2, 1] -
+                  F[0, 2] * F[1, 1] * F[2, 0] +
+                  F[0, 1] * F[1, 2] * F[2, 0] -
+                  F[0, 1] * F[1, 0] * F[2, 2])
+
+            # # F inverse
+            # Fi00 = (F[1, 1] * F[2, 2] - F[2, 1] * F[1, 2]) / rr
+            # Fi01 = (F[0, 2] * F[2, 1] - F[0, 1] * F[2, 2]) / rr
+            # Fi02 = (F[0, 1] * F[1, 2] - F[0, 2] * F[1, 1]) / rr
+            # Fi10 = (F[1, 2] * F[2, 0] - F[1, 0] * F[2, 2]) / rr
+            # Fi11 = (F[0, 0] * F[2, 2] - F[0, 2] * F[2, 0]) / rr
+            # Fi12 = (F[1, 0] * F[0, 2] - F[0, 0] * F[1, 2]) / rr
+            # Fi20 = (F[1, 0] * F[2, 1] - F[2, 0] * F[1, 1]) / rr
+            # Fi21 = (F[2, 0] * F[0, 1] - F[0, 0] * F[2, 1]) / rr
+            # Fi22 = (F[0, 0] * F[1, 1] - F[1, 0] * F[0, 1]) / rr
+            #
+            # # the derivative of the shape functions wrt updated coordinates
+            # for jb in range(10):
+            #     dNjbdx[jb] = dshpg0[jb] * Fi00 + dshpg1[jb] * Fi10 + dshpg2[jb] * Fi20
+            #     dNjbdy[jb] = dshpg0[jb] * Fi01 + dshpg1[jb] * Fi11 + dshpg2[jb] * Fi21
+            #     dNjbdz[jb] = dshpg0[jb] * Fi02 + dshpg1[jb] * Fi12 + dshpg2[jb] * Fi22
+
+            rr = 1.0 / rr
+
             # strain interpolation matrix bm1 .. bm8
             for ib in range(10):
                 d00 = dshpg0[ib]
@@ -2328,6 +2385,22 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 bm6[ib] = d00
                 bm7[ib] = d20
                 bm8[ib] = d10
+
+            # # strain interpolation matrix wrt updated coordinates
+            # for ib in range(10):
+            #     d00 = dNjbdx[ib]
+            #     d10 = dNjbdy[ib]
+            #     d20 = dNjbdz[ib]
+            #     bm0u[ib] = d00
+            #     bm1u[ib] = d10
+            #     bm2u[ib] = d20
+            #     bm3u[ib] = d10
+            #     bm4u[ib] = d00
+            #     bm5u[ib] = d20
+            #     bm6u[ib] = d00
+            #     bm7u[ib] = d20
+            #     bm8u[ib] = d10
+
 
             # ------------------------------------------------------------------------------------------
 
@@ -2354,25 +2427,25 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                                [sxy, syy, syz],
                                [szx, syz, szz]])
 
-                F = np.eye(3, dtype=np.float64)  # deformation gradient
-                for i in range(10):
-                    F[0, 0] += du10x[i] * dshpg0[i]
-                    F[0, 1] += du10x[i] * dshpg1[i]
-                    F[0, 2] += du10x[i] * dshpg2[i]
-                    F[1, 0] += du10y[i] * dshpg0[i]
-                    F[1, 1] += du10y[i] * dshpg1[i]
-                    F[1, 2] += du10y[i] * dshpg2[i]
-                    F[2, 0] += du10z[i] * dshpg0[i]
-                    F[2, 1] += du10z[i] * dshpg1[i]
-                    F[2, 2] += du10z[i] * dshpg2[i]
-                rr = (F[0, 0] * F[1, 1] * F[2, 2] -
-                      F[0, 0] * F[1, 2] * F[2, 1] +
-                      F[0, 2] * F[1, 0] * F[2, 1] -
-                      F[0, 2] * F[1, 1] * F[2, 0] +
-                      F[0, 1] * F[1, 2] * F[2, 0] -
-                      F[0, 1] * F[1, 0] * F[2, 2])
-
-                rr = 1.0 / rr
+                # F = np.eye(3, dtype=np.float64)  # deformation gradient
+                # for i in range(10):
+                #     F[0, 0] += du10x[i] * dshpg0[i]
+                #     F[0, 1] += du10x[i] * dshpg1[i]
+                #     F[0, 2] += du10x[i] * dshpg2[i]
+                #     F[1, 0] += du10y[i] * dshpg0[i]
+                #     F[1, 1] += du10y[i] * dshpg1[i]
+                #     F[1, 2] += du10y[i] * dshpg2[i]
+                #     F[2, 0] += du10z[i] * dshpg0[i]
+                #     F[2, 1] += du10z[i] * dshpg1[i]
+                #     F[2, 2] += du10z[i] * dshpg2[i]
+                # rr = (F[0, 0] * F[1, 1] * F[2, 2] -
+                #       F[0, 0] * F[1, 2] * F[2, 1] +
+                #       F[0, 2] * F[1, 0] * F[2, 1] -
+                #       F[0, 2] * F[1, 1] * F[2, 0] +
+                #       F[0, 1] * F[1, 2] * F[2, 0] -
+                #       F[0, 1] * F[1, 0] * F[2, 2])
+                #
+                # rr = 1.0 / rr
 
                 sigcon = np.zeros((3, 3), dtype=np.float64)  # convected stress
 
@@ -2390,6 +2463,7 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 sigc[5] = rr * sigcon[1][2]
 
             else:
+                rr = 1.0
                 sigc = sig[ippos:ippos + 6]
 
             # elastic test stress
