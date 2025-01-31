@@ -1,0 +1,19 @@
+model name:                                       transition3
+No. of elements:                                        12864
+No. of Degrees of freedom:                              25388
+analysis type:                      elastic buckling analysis
+elastic buckling factors:               [476.99415 491.51984]
+
+=========================================================================================================================
+
+Sum of loads x-direction:        0.00e+00
+Sum of loads y-direction:        0.00e+00
+Sum of loads z-direction:        8.31e-13
+
+=========================================================================================================================
+
+Gauss point         x         y         z      load      disp      peeq  pressure   svmises     triax    eps_cr   csr_max
+          0 -1.62e+01 -1.62e+01  1.36e+02  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+
+=========================================================================================================================
+

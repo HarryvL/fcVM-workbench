@@ -1449,7 +1449,7 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
                 prn_upd("Iteration: {}, Error: {:.2e}".format(iterat, error))
 
                 if iterat > iterat_max:
-                    print(f"RESTART # {restart+1}")
+                    print(f"RESTART # {restart + 1}")
                     # scale down
                     if restart > 3:
                         print("MAXIMUM RESTARTS REACHED")
@@ -2232,9 +2232,9 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
             i3 = 3 * index
             co = nocoord[nd - 1]
             if LD:
-                xlv0[index] = co[0] + u10[i3] #+ du10[i3]
-                xlv1[index] = co[1] + u10[i3 + 1] #+ du10[i3 + 1]
-                xlv2[index] = co[2] + u10[i3 + 2] #+ du10[i3 + 2]
+                xlv0[index] = co[0] + u10[i3]  # + du10[i3]
+                xlv1[index] = co[1] + u10[i3 + 1]  # + du10[i3 + 1]
+                xlv2[index] = co[2] + u10[i3 + 2]  # + du10[i3 + 2]
                 xlv[index] = co + u10[i3:i3 + 3]
             else:
                 xlv0[index] = co[0]
@@ -2333,44 +2333,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 dshpg1[jb] = xsi01 * dshp0[jb] + xsi11 * dshp1[jb] + xsi21 * dshp2[jb]
                 dshpg2[jb] = xsi02 * dshp0[jb] + xsi12 * dshp1[jb] + xsi22 * dshp2[jb]
 
-            # TEST
-            F = np.eye(3, dtype=np.float64)  # deformation gradient
-            for i in range(10):
-                F[0, 0] += du10x[i] * dshpg0[i]
-                F[0, 1] += du10x[i] * dshpg1[i]
-                F[0, 2] += du10x[i] * dshpg2[i]
-                F[1, 0] += du10y[i] * dshpg0[i]
-                F[1, 1] += du10y[i] * dshpg1[i]
-                F[1, 2] += du10y[i] * dshpg2[i]
-                F[2, 0] += du10z[i] * dshpg0[i]
-                F[2, 1] += du10z[i] * dshpg1[i]
-                F[2, 2] += du10z[i] * dshpg2[i]
-            rr = (F[0, 0] * F[1, 1] * F[2, 2] -
-                  F[0, 0] * F[1, 2] * F[2, 1] +
-                  F[0, 2] * F[1, 0] * F[2, 1] -
-                  F[0, 2] * F[1, 1] * F[2, 0] +
-                  F[0, 1] * F[1, 2] * F[2, 0] -
-                  F[0, 1] * F[1, 0] * F[2, 2])
-
-            # # F inverse
-            # Fi00 = (F[1, 1] * F[2, 2] - F[2, 1] * F[1, 2]) / rr
-            # Fi01 = (F[0, 2] * F[2, 1] - F[0, 1] * F[2, 2]) / rr
-            # Fi02 = (F[0, 1] * F[1, 2] - F[0, 2] * F[1, 1]) / rr
-            # Fi10 = (F[1, 2] * F[2, 0] - F[1, 0] * F[2, 2]) / rr
-            # Fi11 = (F[0, 0] * F[2, 2] - F[0, 2] * F[2, 0]) / rr
-            # Fi12 = (F[1, 0] * F[0, 2] - F[0, 0] * F[1, 2]) / rr
-            # Fi20 = (F[1, 0] * F[2, 1] - F[2, 0] * F[1, 1]) / rr
-            # Fi21 = (F[2, 0] * F[0, 1] - F[0, 0] * F[2, 1]) / rr
-            # Fi22 = (F[0, 0] * F[1, 1] - F[1, 0] * F[0, 1]) / rr
-            #
-            # # the derivative of the shape functions wrt updated coordinates
-            # for jb in range(10):
-            #     dNjbdx[jb] = dshpg0[jb] * Fi00 + dshpg1[jb] * Fi10 + dshpg2[jb] * Fi20
-            #     dNjbdy[jb] = dshpg0[jb] * Fi01 + dshpg1[jb] * Fi11 + dshpg2[jb] * Fi21
-            #     dNjbdz[jb] = dshpg0[jb] * Fi02 + dshpg1[jb] * Fi12 + dshpg2[jb] * Fi22
-
-            rr = 1.0 / rr
-
             # strain interpolation matrix bm1 .. bm8
             for ib in range(10):
                 d00 = dshpg0[ib]
@@ -2385,24 +2347,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 bm6[ib] = d00
                 bm7[ib] = d20
                 bm8[ib] = d10
-
-            # # strain interpolation matrix wrt updated coordinates
-            # for ib in range(10):
-            #     d00 = dNjbdx[ib]
-            #     d10 = dNjbdy[ib]
-            #     d20 = dNjbdz[ib]
-            #     bm0u[ib] = d00
-            #     bm1u[ib] = d10
-            #     bm2u[ib] = d20
-            #     bm3u[ib] = d10
-            #     bm4u[ib] = d00
-            #     bm5u[ib] = d20
-            #     bm6u[ib] = d00
-            #     bm7u[ib] = d20
-            #     bm8u[ib] = d10
-
-
-            # ------------------------------------------------------------------------------------------
 
             # strain
             deps = np.zeros(6, dtype=np.float64)
@@ -2427,25 +2371,25 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                                [sxy, syy, syz],
                                [szx, syz, szz]])
 
-                # F = np.eye(3, dtype=np.float64)  # deformation gradient
-                # for i in range(10):
-                #     F[0, 0] += du10x[i] * dshpg0[i]
-                #     F[0, 1] += du10x[i] * dshpg1[i]
-                #     F[0, 2] += du10x[i] * dshpg2[i]
-                #     F[1, 0] += du10y[i] * dshpg0[i]
-                #     F[1, 1] += du10y[i] * dshpg1[i]
-                #     F[1, 2] += du10y[i] * dshpg2[i]
-                #     F[2, 0] += du10z[i] * dshpg0[i]
-                #     F[2, 1] += du10z[i] * dshpg1[i]
-                #     F[2, 2] += du10z[i] * dshpg2[i]
-                # rr = (F[0, 0] * F[1, 1] * F[2, 2] -
-                #       F[0, 0] * F[1, 2] * F[2, 1] +
-                #       F[0, 2] * F[1, 0] * F[2, 1] -
-                #       F[0, 2] * F[1, 1] * F[2, 0] +
-                #       F[0, 1] * F[1, 2] * F[2, 0] -
-                #       F[0, 1] * F[1, 0] * F[2, 2])
-                #
-                # rr = 1.0 / rr
+                F = np.eye(3, dtype=np.float64)  # deformation gradient
+                for i in range(10):
+                    F[0, 0] += du10x[i] * dshpg0[i]
+                    F[0, 1] += du10x[i] * dshpg1[i]
+                    F[0, 2] += du10x[i] * dshpg2[i]
+                    F[1, 0] += du10y[i] * dshpg0[i]
+                    F[1, 1] += du10y[i] * dshpg1[i]
+                    F[1, 2] += du10y[i] * dshpg2[i]
+                    F[2, 0] += du10z[i] * dshpg0[i]
+                    F[2, 1] += du10z[i] * dshpg1[i]
+                    F[2, 2] += du10z[i] * dshpg2[i]
+                rr = (F[0, 0] * F[1, 1] * F[2, 2] -
+                      F[0, 0] * F[1, 2] * F[2, 1] +
+                      F[0, 2] * F[1, 0] * F[2, 1] -
+                      F[0, 2] * F[1, 1] * F[2, 0] +
+                      F[0, 1] * F[1, 2] * F[2, 0] -
+                      F[0, 1] * F[1, 0] * F[2, 2])
+
+                rr = 1.0 / rr
 
                 sigcon = np.zeros((3, 3), dtype=np.float64)  # convected stress
 
@@ -2463,7 +2407,6 @@ def update_stress_load(gp10, elNodes, nocoord, materialbyElement, sig_yield, dis
                 sigc[5] = rr * sigcon[1][2]
 
             else:
-                rr = 1.0
                 sigc = sig[ippos:ippos + 6]
 
             # elastic test stress
@@ -2634,14 +2577,14 @@ def pasteResults(gnl, doc, elNodes, nocoord, nocoord_old, dis, disp_el, eigenval
 
     if gnl == "GNLY" and not (float(nstep) > 1.0 and maxImp == 0.0):
         resVol3 = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
-        resVol3.Label = "ElasticBucklingShape_lambda=" + str(round(eigenval[0], 2))
+        resVol3.Label = "ElasticBucklingShape_lambda1=" + str(round(eigenval[0], 3))
         displacements3 = map(App.Vector, np.array_split(evec1, nn))
         mode_disp_vol3 = dict(zip(nodes, displacements3))
         mode_results_vol3['disp'] = mode_disp_vol3
         results3 = [mode_results_vol2]
 
         resVol4 = analysis.addObject(ObjectsFem.makeResultMechanical(doc))[0]
-        resVol4.Label = "ElasticBucklingShape_lambda=" + str(round(eigenval[1], 2))
+        resVol4.Label = "ElasticBucklingShape_lambda2=" + str(round(eigenval[1], 3))
         displacements4 = map(App.Vector, np.array_split(evec2, nn))
         mode_disp_vol4 = dict(zip(nodes, displacements4))
         mode_results_vol4['disp'] = mode_disp_vol4
@@ -2962,8 +2905,8 @@ def exportVTK(gnl, elNodes, nocoord, nocoord_old, dis, disp_el, eigenval, eigenv
         evec1 = evec1.reshape((len(nocoord), 3))
         evec2 = evec2.reshape((len(nocoord), 3))
         grid.point_data['Elastic Displacement'] = elastic_disp
-        grid.point_data['Buckling shape for lambda = ' + str(round(eigenval[0], 2))] = evec1
-        grid.point_data['Buckling shape for lambda = ' + str(round(eigenval[1], 2))] = evec2
+        grid.point_data['Buckling shape for lambda1 = ' + str(round(eigenval[0], 3))] = evec1
+        grid.point_data['Buckling shape for lambda2 = ' + str(round(eigenval[1], 3))] = evec2
 
     grid.point_data['Stress Tensor'] = stress
 
