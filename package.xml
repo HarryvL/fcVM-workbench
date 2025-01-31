@@ -1,26 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
-
   <name>fcVM-workbench</name>
-
-  <description>Finite element collapse analysis based on the von Mises plasticity model for use with [FreeCAD](https://freecad.org)</description>
-
+  <description>Finite element collapse analysis based on the von Mises plasticity model for use with FreeCAD</description>
   <version>2024.9.5</version>
-
   <date>2024-09-05</date>
-
   <maintainer email="hvlanalysis@gmail.com">HarryvL</maintainer>
-
   <url branch="main" type="repository">https://github.com/HarryvL/fcVM-workbench.git</url>
-
   <url type="readme">https://github.com/HarryvL/fcVM-workbench.git/raw/main/README.md</url>
-
   <icon>icons/fcFEM.svg</icon>
 
   <content>
     <workbench>
       <classname>fcVMWorkbench</classname>
       <subdirectory>./</subdirectory>
+      <depend>numpy</depend>
+      <depend>numba</depend>
+      <depend>matplotlib</depend>
+      <depend>meshio</depend>
+      <depend>pyvista</depend>
+      <depend>scikit-sparse</depend>
+      <depend version_eq="1.11.3">scipy</depend>
+      <tag>FEM</tag>
+      <tag>FEA</tag>
     </workbench>
   </content>
 
