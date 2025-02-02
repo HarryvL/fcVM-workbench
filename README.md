@@ -51,9 +51,9 @@ pyvista
 meshio
 ```
 
-Note: these packages will auto-install via the addon manager unless manual installation is necessary. In th
+Note: these packages will auto-install via the addon manager unless manual installation is necessary.
 
-#### Manual Installation
+#### Dependency Manual Installation
 
 <details><summary>Expand to view instructions on installing depedencies manually</summary>
 
