@@ -284,7 +284,7 @@ def setUpInput(doc, mesh, analysis):
             if int(App.Version()[0]) < 1 and int(App.Version()[1]) < 22:
                 F = obj.Force
             else:
-                F = float(App.Units.Quantity(obj.Force.getValuesAs('N')))
+                F = float(App.Units.Quantity(obj.Force.getValueAs('N')))
             d = obj.DirectionVector
             N = 0
             L = 0.0

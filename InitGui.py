@@ -36,7 +36,8 @@ import sys
 import dummyVM
 import FreeCAD
 import FreeCADGui
-from PySide2 import QtWidgets, QtGui, QtCore
+# from PySide2 import QtWidgets, QtGui, QtCore
+from PySide import QtWidgets, QtGui, QtCore
 
 global FCmw
 FCmw = FreeCADGui.getMainWindow()
@@ -53,6 +54,9 @@ source_code_path = os.path.join(dir_name, 'source code')
 
 sys.path.append(source_code_path)
 
+if "PySide6" in sys.modules:
+    del sys.modules["PySide6"]
+
 
 class fcVMWorkbench(Workbench):
     Icon = os.path.join(dir_name, "icons", "fcFEM.svg")
@@ -68,7 +72,8 @@ class fcVMWorkbench(Workbench):
         return "Gui::PythonWorkbench"
 
     def Initialize(self):
-        from PySide2 import QtGui
+        # from PySide2 import QtGui
+        from PySide import QtGui
         self.appendToolbar("fcVM", [])
         self.appendMenu("fcVM", [])
         self.palette_warning = QtGui.QPalette()
@@ -78,7 +83,8 @@ class fcVMWorkbench(Workbench):
         # self.palette.setColor(QtGui.QPalette.Text, QtGui.QColor("red"))
 
     def Activated(self):
-        from PySide2 import QtCore
+        # from PySide2 import QtCore
+        from PySide import QtCore
         global fcVM_window
 
         import dummyVM
@@ -204,7 +210,8 @@ class fcVMWorkbench(Workbench):
         FreeCAD.removeDocumentObserver(self.obs)
 
     def start_clicked(self):
-        from PySide2 import QtWidgets
+        # from PySide2 import QtWidgets
+        from PySide import QtWidgets
 
         self.save_clicked()
 
