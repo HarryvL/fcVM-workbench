@@ -13,13 +13,85 @@ fcVM is a finite element workbench and solver for performing collapse analysis o
 
 ### Installation
 
+#### Auto Install
+
+fcVM is now available via the FreeCAD Addon Manager which will also automatically install necessary 3rd-party depedencines.
+
+1. File > Tools > Addon Manager
+1. Search and select the fcVM-workbench
+1. Click 'Install'
+1. Once installation is complete FreeCAD will prompt a restart.
+1. Choose 'Ok'.
+
 #### Manual Install
+
+<details><summary>Expand to view manual installation instructions</summary>
+
 1. Create a `fcVM-workbench` directory in the FreeCAD `Mod/` directory. 
     * **Tip**: the location of which can be found by typing `App.getUserAppDataDir()` in the FreeCAD python console.
 1. Copy the entire fcVM-workbench repository into this new `fcVM-workbench` directory.
 1. Restart FreeCAD
 
-**Result**:  If all went well, the fcVM workbench should now be an option in the FreeCAD workbench dropdown menu.
+</details>
+
+**Result**: If all went well, the fcVM workbench should now be an option in the FreeCAD workbench dropdown menu.
+ 
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
+
+### Dependencies
+
+fcVM workbench depends on the following packages:  
+```
+numpy
+scipy (version 1.11.3)
+numba
+matplotlib
+scikit-sparse
+pyvista
+meshio
+```
+
+Note: these packages will auto-install via the addon manager unless manual installation is necessary.
+
+#### Dependency Manual Installation
+
+<details><summary>Expand to view instructions on installing depedencies manually</summary>
+
+##### Linux & MacOS
+Depedencies can be installed with the usual package managers (e.g. conda or mamba).  
+
+##### Windows
+On Windows delendency installation requires some extra steps:  
+1. Download Miniforge3: [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe)
+1. Run the installer: Miniforge3-Windows-x86_64.exe
+1. Find and run Miniforge on your system - this opens a Miniforge Prompt: (base) C:\"path">
+1. Create a new virtual environment:  
+    (base) C:\"path"> `mamba create --name fcVM` (or any other name of your choice)
+1. Change into the new environment:   
+    (base) C:\"path"> `mamba activate fcVM` (or the another name of your choice)
+1. Install FreeCAD and dependencies:  
+    (fcVM) C:\"path"> `mamba install freecad scipy=1.11.3 numba matplotlib scikit-sparse pyvista meshio` (with spaces and no commas)
+1. Check with python if the dependencies can be imported  
+    (fcVM) C:\"path"> `python`  
+    \>>> `import scipy.sparse`  
+    \>>> `import sksparse.cholmod`
+1. If no problems present, quit python and start freecad:  
+    (fcVM) C:\"path"> `freecad`
+1. If you encounter a "black screen" then follow the advice [here](https://forum.freecad.org/viewtopic.php?t=36087&start=40#p669458), i.e. rename all `opengl32sw.dll` files on your system to `opengl32.dll`.
+
+</details>
+
+### Documentation
+Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
+
+<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Failure_Mechanism.png" height="200"/>
+
+### Current Limitations
+fcVM only works with 2nd order volumetric meshes generated with GMSH or Netgen (10-noded tetrahedrals). 
+
+### Development
+
+The current directory tree of fcVM-workbench
 
 ```bash
 App.getUserAppDataDir()
@@ -58,50 +130,6 @@ App.getUserAppDataDir()
 │   │   └── dummy.py
 │   │
 ```
-
-<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Pit_Example_Failure_Mechanism.png" height="250"/>
-
-### Dependencies
-fcVM imports (from) the following packages:  
-```
-numpy
-scipy (version 1.11.3)
-numba
-matplotlib
-scikit-sparse
-pyvista
-meshio
-```
-
-#### Linux & MacOS
-Depedencies can be installed with the usual package managers (e.g. conda or mamba).  
-
-#### Windows
-On Windows delendency installation requires some extra steps:  
-1. Download Miniforge3: [Miniforge3](https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe)
-1. Run the installer: Miniforge3-Windows-x86_64.exe
-1. Find and run Miniforge on your system - this opens a Miniforge Prompt: (base) C:\"path">
-1. Create a new virtual environment:  
-    (base) C:\"path"> `mamba create --name fcVM` (or any other name of your choice)
-1. Change into the new environment:   
-    (base) C:\"path"> `mamba activate fcVM` (or the another name of your choice)
-1. Install FreeCAD and dependencies:  
-    (fcVM) C:\"path"> `mamba install freecad scipy=1.11.3 numba matplotlib scikit-sparse pyvista meshio` (with spaces and no commas)
-1. Check with python if the dependencies can be imported  
-    (fcVM) C:\"path"> `python`  
-    \>>> `import scipy.sparse`  
-    \>>> `import sksparse.cholmod`
-1. If no problems present, quit python and start freecad:  
-    (fcVM) C:\"path"> `freecad`
-1. If you encounter a "black screen" then follow the advice [here](https://forum.freecad.org/viewtopic.php?t=36087&start=40#p669458), i.e. rename all `opengl32sw.dll` files on your system to `opengl32.dll`.
-
-### Documentation
-Please refer to source code for in-line comments and to the FreeCAD forum (TBC)
-
-<img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Load_Displacement.png" height="250"/><img src="https://github.com/HarryvL/fcVM-workbench/blob/main/pictures/Tubes_Example_Failure_Mechanism.png" height="200"/>
-
-### Current Limitations
-fcVM only works with 2nd order volumetric meshes generated with GMSH or Netgen (10-noded tetrahedrals). 
 
 ### Licence information
 
