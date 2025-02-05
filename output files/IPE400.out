@@ -1,0 +1,19 @@
+model name:                                            IPE400
+No. of elements:                                         4418
+No. of Degrees of freedom:                               8996
+analysis type:                      elastic buckling analysis
+elastic buckling factors:                   [0.48148 1.91741]
+
+=========================================================================================================================
+
+Sum of loads x-direction:       -2.47e-10
+Sum of loads y-direction:        0.00e+00
+Sum of loads z-direction:        0.00e+00
+
+=========================================================================================================================
+
+Gauss point         x         y         z      load      disp      peeq  pressure   svmises     triax    eps_cr   csr_max
+          0  4.48e+02  8.69e+01  3.37e+02  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00  0.00e+00
+
+=========================================================================================================================
+
