@@ -1649,6 +1649,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             self.disp_old = disp_old
             self.disp_new = disp_new
             self.sig_yield = sig_yield
+            self.ds = 1.0
 
         def stop(self, event):
             self.cnt = False
@@ -1678,6 +1679,9 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
         def submit(self, LF):
             self.target_LF_out = float(LF)
+
+        def set_scale(self, ds):
+            self.ds = float(ds)
 
         def PSV(self, event):
 
@@ -1777,10 +1781,10 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
             disp_range = max(self.disp_new) - min(self.disp_new)
 
-            if disp_range == 0.0:
-                scale_disp = 1.0
-            else:
-                scale_disp = 0.2 * geo_range / disp_range
+            # if disp_range == 0.0:
+            #     scale_disp = 1.0
+            # else:
+            #     scale_disp = 0.2 * geo_range / disp_range
 
             padding = np.full(len(self.elNodes), 10, dtype=int)
             self.elements = np.vstack((padding, (self.elNodes - 1).T)).T
@@ -1793,7 +1797,7 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
             grid = pv.UnstructuredGrid(self.elements, celltypes, points)
             grid.point_data['Displacement'] = np.reshape(disp_new, (len(nocoord), 3))
 
-            grid1 = grid.warp_by_vector(vectors='Displacement', factor=scale_disp,
+            grid1 = grid.warp_by_vector(vectors='Displacement', factor=self.ds,
                                         inplace=False, progress_bar=False)
             grid1.point_data["Major Principal Stress"] = tet10s1.flatten(order="F")
             grid1.point_data["Intermediate Principal Stress"] = tet10s2.flatten(order="F")
@@ -1926,17 +1930,17 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
 
             disp_range = max(self.disp_new) - min(self.disp_new)
 
-            if disp_range == 0.0:
-                scale = 1.0
-            else:
-                scale = 0.2 * geo_range / disp_range
+            # if disp_range == 0.0:
+            #     scale = 1.0
+            # else:
+            #     scale = self.ds * geo_range / disp_range
 
             padding = np.full(len(self.elNodes), 10, dtype=int)
             self.elements = np.vstack((padding, (self.elNodes - 1).T)).T
 
             celltypes = np.full(len(self.elNodes), fill_value=CellType.QUADRATIC_TETRA, dtype=np.uint8)
 
-            points = self.nocoord + scale * np.reshape(disp_new, (len(nocoord), 3))
+            points = self.nocoord + self.ds * np.reshape(disp_new, (len(nocoord), 3))
             grid1 = pv.UnstructuredGrid(self.elements, celltypes, points)
             grid1.point_data["Critical Strain Ratio\n"] = tet10csr.flatten(order="F")
             grid2 = pv.UnstructuredGrid(self.elements, celltypes, points)
@@ -2010,11 +2014,12 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
     b_h = 0.06
     b_s = 0.01
     b_y = 0.05
-    axstop = plt.axes([0.4 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
-    axadd = plt.axes([0.4 - b_w / 2.0, b_y, b_w, b_h])
-    axbox = plt.axes([0.4 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
-    axVTK = plt.axes([0.675, b_y, b_w, b_h])
-    axPSV = plt.axes([0.675 + b_w + b_s, b_y, b_w, b_h])
+    axstop = plt.axes([0.3 - b_w / 2.0 - b_w - b_s, b_y, b_w, b_h])
+    axadd = plt.axes([0.3 - b_w / 2.0, b_y, b_w, b_h])
+    axbox = plt.axes([0.3 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    dsbox = plt.axes([0.7 - b_w / 2.0 + b_w + b_s, b_y, b_w, b_h])
+    axVTK = plt.axes([0.575, b_y, b_w, b_h])
+    axPSV = plt.axes([0.575 + b_w + b_s, b_y, b_w, b_h])
     bstop = Button(axstop, 'stop')
     bstop.on_clicked(callback.stop)
     badd = Button(axadd, 'add')
@@ -2026,8 +2031,15 @@ def plot(fcVM, averaged, el_limit, ul_limit, un, lbd, csrplot, peeqmax, dl, du, 
     text_box = TextBox(axbox, "", textalignment="center")
     text_box.set_val(target_LF)
     text_box.on_submit(callback.submit)
-    fig.text(0.4 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
+    fig.text(0.3 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Target Load Factor', fontsize=10)
     fig.canvas.mpl_connect('close_event', callback.close_window)
+
+    ds_box = TextBox(dsbox, "", textalignment="center")
+    ds_box.set_val(1.0)
+    ds_box.on_submit(callback.set_scale)
+    fig.text(0.7 - b_w / 2.0 + 2.0 * (b_w + b_s) - 0.005, b_y + b_h / 2.0 - 0.01, 'Displacement Scale', fontsize=10)
+    fig.canvas.mpl_connect('close_event', callback.close_window)
+
 
     if ul_limit != 0:
         if fcVM.csrRbtn.isChecked():
