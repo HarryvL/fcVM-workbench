@@ -1485,9 +1485,10 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
 
             if abs(target_LF - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
                 print("REACHED TARGET LOAD")
-                du = (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * du
-                sig_new = sig_old + (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * (sig_new - sig_old)
-                sig_test = sig_old + (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * (sig_test - sig_old)
+                fac = (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step])
+                du = fac * du
+                sig_new = sig_old + fac * (sig_new - sig_old)
+                sig_test = sig_old + fac * (sig_test - sig_old)
                 lbd[step + 1] = target_LF
                 disp_new += du
                 disp_new_node = np.array(
