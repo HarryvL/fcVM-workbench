@@ -62,6 +62,12 @@ else:
 
 import fcVM as ft
 
+if 'fcVM' in sys.modules.keys():
+    print("fcVM imported correctly")
+else:
+    print("fcVM not imported correctly")
+
+
 t = 7 * [0.0]
 
 try:

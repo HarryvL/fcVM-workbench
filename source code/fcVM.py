@@ -43,8 +43,8 @@ import matplotlib.pyplot as plt
 from femtools import membertools
 from femmesh import meshsetsgetter
 from femmesh import meshtools as mt
-from scipy.sparse.linalg import eigsh
-from scipy.linalg import eig
+from scipy.sparse.linalg import eigsh, lobpcg
+from scipy.linalg import eigh
 from femresult import resulttools as rt
 from feminout import importToolsFem as itf
 from matplotlib.widgets import Button, TextBox
@@ -88,6 +88,8 @@ def setUpAnalysis():
     doc = App.ActiveDocument
 
     return_code = 0
+
+    print("hello from fcVM setUpAnalysis")
 
     mesh = None
 
@@ -1484,6 +1486,8 @@ def calcDisp(elNodes, nocoord, fixdof, movdof, modf, materialbyElement, stm, row
             if abs(target_LF - lbd[step]) < abs(lbd[step + 1] - lbd[step]) and iRiks:
                 print("REACHED TARGET LOAD")
                 du = (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * du
+                sig_new = sig_old + (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * (sig_new - sig_old)
+                sig_test = sig_old + (target_LF - lbd[step]) / (lbd[step + 1] - lbd[step]) * (sig_test - sig_old)
                 lbd[step + 1] = target_LF
                 disp_new += du
                 disp_new_node = np.array(
@@ -2091,6 +2095,7 @@ def update_PEEQ_CSR(nelem, materialbyElement, sig_test, sig_new, sig_yield, ulti
     beta = 1.5
 
     for el in range(nelem):
+        # print("sigma: ", sig_new[24 * el:24 * el + 6])
         for ip in range(4):
             ipos1 = 4 * el + ip
             ipos2 = 24 * el + 6 * ip

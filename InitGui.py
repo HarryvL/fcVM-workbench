@@ -64,6 +64,7 @@ class fcVMWorkbench(Workbench):
     ToolTip = "Plastic collapse analysis with the von Mises material model"
 
     def __init__(self):
+        # print("__init__ fcVM")
         pass
         # import task_result_mechanical
         # sys.modules["femtaskpanels.task_result_mechanical"] = sys.modules[task_result_mechanical.__name__]
@@ -73,6 +74,7 @@ class fcVMWorkbench(Workbench):
 
     def Initialize(self):
         # from PySide2 import QtGui
+        # print("start fcVM")
         from PySide import QtGui
         self.appendToolbar("fcVM", [])
         self.appendMenu("fcVM", [])
@@ -84,11 +86,14 @@ class fcVMWorkbench(Workbench):
 
     def Activated(self):
         # from PySide2 import QtCore
+        print("activated fcVM")
         from PySide import QtCore
         global fcVM_window
 
         import dummyVM
         self.dir_name = os.path.dirname(dummyVM.file_path())
+
+        print("self.dir_name", self.dir_name)
 
         self.doc = FreeCAD.activeDocument()
         if self.doc == None:
